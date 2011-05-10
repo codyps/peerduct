@@ -1,0 +1,15 @@
+Peerduct
+========
+
+A peer to peer protocol written with NAT in mind (as well as ipv6
+compatability).
+
+
+Considerations
+--------------
+
+ * Kadmelia/KAD (ed2k)?
+ * Something via udp?
+ * Gnutella is also popular.
+
+
