@@ -5,6 +5,11 @@ A peer to peer protocol written with NAT in mind (as well as ipv6
 compatability).
 
 
+ * Kadmelia
+ 	* ed2k
+	* Bittorrent DHT
+
+
 Considerations
 --------------
 
