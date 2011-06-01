@@ -30,9 +30,19 @@ struct nd_entry {
 	uint16_t tcp_port;
 	uint16_t udp_port;
 	uint8_t  version;  /* 0 = kad v1, non-zero indicates v2 and is a
-			      featured bitmask */
+			      feature bitmask */
 	uint8_t  kad_udp_key[8]; 
 	uint8_t  verified; /* non-zero value indicates verified. */
+} __packed;
+
+
+struct nd_entry_v0 {
+	uint8_t client_id[16];
+	uint32_t ip_addr;
+	uint16_t tcp_port;
+	uint16_t udp_port;
+	uint8_t  type;		/* how confident in the contact am I.
+				   range is 0 to 4, 4 being the worst */
 } __packed;
 
 struct nd_parse_ctx {
@@ -42,7 +52,6 @@ struct nd_parse_ctx {
 
 	int version; /* honestly, this is a pain. */
 
-
 	struct peer *peers;
 	struct peer **tail;
 
@@ -51,10 +60,13 @@ struct nd_parse_ctx {
 
 	int error; /* if less than zero, return as error and parse no more. */
 
-	struct nd_entry cur_e;
+	union {
+		struct nd_entry cur_e;
+		struct nd_entry_v0 cur_e_v0;
+	};
+
 	size_t cur_e_pos; /* byte offset within cur_e which is valid (partially
 			     populated cur_e) */
-
 
 };
 

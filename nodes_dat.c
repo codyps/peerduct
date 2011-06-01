@@ -59,6 +59,78 @@ static struct peer *mk_kad_peer(struct nd_entry *entry)
 	return &kp->peer;
 }
 
+static struct peer *mk_kad_peer_v0(struct nd_entry_v0 *entry)
+{
+	struct kad_peer *kp = malloc(sizeof(*kp));
+	if (!kp)
+		return NULL;
+
+	memcpy(kp->client_id, entry->client_id, sizeof(kp->client_id));
+	memset(kp->kad_udp_key, 0, sizeof(kp->kad_udp_key));
+
+	kp->version = 0;
+	kp->verified = 0;
+
+	kp->udp.sin_family = AF_INET;
+	kp->tcp.sin_family = AF_INET;
+
+	kp->udp.sin_port = le16ton(entry->udp_port);
+	kp->tcp.sin_port = le16ton(entry->tcp_port);
+
+	kp->udp.sin_addr.s_addr = le16ton(entry->ip_addr);
+	kp->tcp.sin_addr.s_addr = le16ton(entry->ip_addr);
+
+	kp->peer.type = PT_KAD;
+	kp->peer.next = NULL;
+
+	return &kp->peer;
+}
+
+
+/* do not call if npc->header_parsed is true */
+static int header_parser(struct nd_parse_ctx *npc, void *buf, size_t len)
+{
+	size_t consumed = 0;
+
+	if (npc->head_pos < sizeof(uint32_t)) {
+		size_t cpy_sz = MIN(len, sizeof(uint32_t) - npc->head_pos);
+		memcpy( (char *)&(npc->head) + npc->head_pos, buf, cpy_sz);
+		npc->head_pos += cpy_sz;
+		consumed += cpy_sz;
+
+		if (npc->head_pos >= sizeof(uint32_t)) {
+			if (!npc->head.zero) {
+				npc->version = 0;
+				npc->nr_total = le32toh(npc->head.zero);
+				npc->header_parsed = true;
+				return consumed;
+			} else {
+				buf += cpy_sz;
+				len -= cpy_sz;
+			}
+		}
+
+	}
+	
+	/* this is not an else case of the first if as the value being compared
+	 * against could be changed within the first if. */
+	if (npc->head_pos >= sizeof(uint32_t)) {
+		size_t cpy_sz = MIN(len, sizeof(npc->head) - npc->head_pos);
+		memcpy( (char *)&(npc->head) + npc->head_pos, buf, cpy_sz);
+		npc->head_pos += cpy_sz;
+		consumed += cpy_sz;
+
+		if (npc->head_pos >= sizeof(npc->head)) {
+			npc->version = le32toh(npc->head.version);
+			npc->nr_total = le32toh(npc->head.nr);
+			npc->header_parsed = true;
+			return consumed;
+		}
+
+	}
+
+	return consumed;
+}
 
 int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 {
@@ -72,26 +144,27 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 		return consumed;
 
 	if (!npc->header_parsed) {
-		size_t cpy_sz = MIN(len, sizeof(npc->head) - npc->head_pos);
-		memcpy( (char *)&(npc->head) + npc->head_pos, buf, cpy_sz);
-		buf += cpy_sz;
-		len -= cpy_sz;
-		consumed += cpy_sz;
-		npc->head_pos += cpy_sz;
+		int r = header_parser(npc, buf, len);
 
-		/* we may have either consumed all the data, or finished
-		 * populating the header. */
-		if (len == 0)
-			return consumed;
-		
-		/* at this point, header fully is populated */
-		if (npc->head.zero || le32toh(npc->head.version) != 2) {
-			npc->error = -EINVAL;
-			return npc->error;
-		}
+		if (!npc->header_parsed)
+			return r;
 
-		npc->nr_total = le32toh(npc->head.nr);
-		npc->header_parsed = true;
+		buf += r;
+		len -= r;
+		consumed += r;
+	}
+
+	/* if we pass the above if, the header must be parsed.
+	 * Thus, version and  nr_total will be populated. */
+
+	size_t goal_len;
+	if (npc->version == 0)
+		goal_len = sizeof(npc->cur_e_v0);
+	else if (npc->version == 2)
+		goal_len = sizeof(npc->cur_e);
+	else {
+		npc->error = -EINVAL;
+		return npc->error;
 	}
 
 	uint32_t nr_total = npc->nr_total;
@@ -99,7 +172,7 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 	size_t   pos = npc->cur_e_pos;
 	for (nr = npc->nr_consumed; nr < nr_total; nr++) {
 		char *start_cpy = (char *)&(npc->cur_e) + pos;
-		size_t rem = sizeof(npc->cur_e) - pos;
+		size_t rem = goal_len - pos;
 
 		size_t cpy_len = MIN(rem, len);
 
@@ -107,10 +180,12 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 
 		pos += cpy_len;
 
-		if (likely(pos == sizeof(npc->cur_e))) {
+		if (likely(pos == goal_len)) {
 			/* we filled this entry, deserialize it
 			 * and continue */
-			struct peer *p = mk_kad_peer(&npc->cur_e);
+			struct peer *p = npc->version ?
+				mk_kad_peer(&npc->cur_e) :
+				mk_kad_peer_v0(&npc->cur_e_v0);
 			if (!p) {
 				/* failed allocation? set npc->error and
 				 * return the consumed bytes. Error will be
