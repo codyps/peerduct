@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 
 	char buf[2048];
 	size_t r;
-	while((r = fread(buf, sizeof(buf), 1, in)) > 0) {
+	while((r = fread(buf, 1, sizeof(buf), in)) > 0) {
 		int p = nd_parse_proc(&npc, buf, r);
 		if (p < 0) {
 			nd_parse_destroy(&npc);

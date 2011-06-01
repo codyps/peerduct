@@ -15,11 +15,17 @@
 
 int nd_parse_init(struct nd_parse_ctx *npc)
 {
-	npc->len   = 0;
-	npc->nr    = 0;
-	npc->peers = NULL;
-	npc->tail  = &(npc->peers);
-	npc->error = 0;
+	npc->head_pos      = 0;
+	npc->header_parsed = false;
+	/* head ?? */
+	npc->version       = 0;
+	npc->peers         = NULL;
+	npc->tail          = &(npc->peers);
+	npc->nr_consumed   = 0;
+	npc->nr_total      = 0;
+	npc->error         = 0;
+	/* cur_e ?? */
+	npc->cur_e_pos     = 0;
 
 	return 0;
 }
@@ -37,7 +43,6 @@ static struct peer *mk_kad_peer(struct nd_entry *entry)
 
 	kp->version = entry->version;
 	kp->verified = entry->verified;
-
 
 	kp->udp.sin_family = AF_INET;
 	kp->tcp.sin_family = AF_INET;
@@ -66,30 +71,33 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 	if (len == 0)
 		return consumed;
 
-	if (npc->len < sizeof(npc->head)) {
-		size_t cpy_sz = MIN(len, sizeof(npc->head) - npc->len);
-		memcpy( (char *)&(npc->head) + npc->len, buf, cpy_sz);
+	if (!npc->header_parsed) {
+		size_t cpy_sz = MIN(len, sizeof(npc->head) - npc->head_pos);
+		memcpy( (char *)&(npc->head) + npc->head_pos, buf, cpy_sz);
 		buf += cpy_sz;
 		len -= cpy_sz;
 		consumed += cpy_sz;
-		npc->len += cpy_sz;
+		npc->head_pos += cpy_sz;
 
 		/* we may have either consumed all the data, or finished
 		 * populating the header. */
 		if (len == 0)
 			return consumed;
+		
+		/* at this point, header fully is populated */
+		if (npc->head.zero || le32toh(npc->head.version) != 2) {
+			npc->error = -EINVAL;
+			return npc->error;
+		}
+
+		npc->nr_total = le32toh(npc->head.nr);
+		npc->header_parsed = true;
 	}
 
-	/* at this point, header fully is populated */
-	if (npc->head.zero || le32toh(npc->head.version) != 2) {
-		npc->error = -EINVAL;
-		return npc->error;
-	}
-
-	uint32_t nr_max = le32toh(npc->head.nr);
+	uint32_t nr_total = npc->nr_total;
 	uint32_t nr;
 	size_t   pos = npc->cur_e_pos;
-	for (nr = npc->nr; nr < nr_max; nr++) {
+	for (nr = npc->nr_consumed; nr < nr_total; nr++) {
 		char *start_cpy = (char *)&(npc->cur_e) + pos;
 		size_t rem = sizeof(npc->cur_e) - pos;
 
@@ -108,9 +116,12 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 				 * return the consumed bytes. Error will be
 				 * returned on next call */
 				npc->error = -errno;
+				npc->nr_consumed = nr;
+				npc->cur_e_pos = 0;
 				return consumed;
 			}
 
+			pos = 0;
 			*(npc->tail) = p;
 			npc->tail = &(p->next);
 
@@ -118,6 +129,7 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 			/* entry not filled but data done.
 			 * update things for next time */
 			npc->cur_e_pos = pos;
+			npc->nr_consumed = nr;
 			return consumed;
 		}
 	}
@@ -141,7 +153,6 @@ void nd_parse_destroy(struct nd_parse_ctx *npc)
 	free_kad_peers(npc->peers);
 	npc->peers = NULL;
 	npc->tail = &(npc->peers);
-
 }
 
 

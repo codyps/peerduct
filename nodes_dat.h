@@ -3,6 +3,8 @@
 
 #include <netinet/in.h> /* sockaddr_in */
 
+#include <stdbool.h> /* bool */
+
 #include "useful.h" /* __packed */
 #include "peer.h" /* kad_peer */
 
@@ -34,14 +36,19 @@ struct nd_entry {
 } __packed;
 
 struct nd_parse_ctx {
-	size_t len; /* bytes read so far */
-
+	size_t head_pos; /* our position within the header. */
+	bool   header_parsed;
 	struct nd_header head;
+
+	int version; /* honestly, this is a pain. */
+
 
 	struct peer *peers;
 	struct peer **tail;
 
-	size_t nr; /* entrys read so far */
+	size_t nr_consumed;	/* entrys read so far */
+	size_t nr_total;	/* total entries in file */
+
 	int error; /* if less than zero, return as error and parse no more. */
 
 	struct nd_entry cur_e;
