@@ -67,7 +67,7 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 		return consumed;
 
 	if (npc->len < sizeof(npc->head)) {
-		size_t cpy_sz = MIN(len + npc->len, sizeof(npc->head));
+		size_t cpy_sz = MIN(len, sizeof(npc->head) - npc->len);
 		memcpy( (char *)&(npc->head) + npc->len, buf, cpy_sz);
 		buf += cpy_sz;
 		len -= cpy_sz;

@@ -58,6 +58,9 @@ struct kad_peer {
 };
 
 
+#include "useful.h"
+#define kad_peer_from_peer(p) container_of(p, struct kad_peer, peer)
+
 void free_kad_peers(struct peer *peer);
 
 #endif

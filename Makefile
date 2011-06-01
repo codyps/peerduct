@@ -5,8 +5,9 @@ RM = rm -f
 all: build
 
 
-TARGETS = pd
-pd: main.c.o nodes_dat.c.o peer.c.o
+TARGETS = pd nd_reader
+pd: main.c.o
+nd_reader: nd_reader.c.o nodes_dat.c.o peer.c.o
 
 srcdir = .
 VPATH = $(srcdir)
