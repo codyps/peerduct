@@ -51,8 +51,9 @@ static struct peer *mk_kad_peer(struct nd_entry *entry)
 	kp->udp.sin_port = le16ton(entry->udp_port);
 	kp->tcp.sin_port = le16ton(entry->tcp_port);
 
-	kp->udp.sin_addr.s_addr = le16ton(entry->ip_addr);
-	kp->tcp.sin_addr.s_addr = le16ton(entry->ip_addr);
+	/* stored as be */
+	kp->udp.sin_addr.s_addr = entry->ip_addr;
+	kp->tcp.sin_addr.s_addr = entry->ip_addr;
 
 	kp->peer.type = PT_KAD;
 	kp->peer.next      = NULL;
