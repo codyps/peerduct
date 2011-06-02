@@ -36,6 +36,7 @@ struct nd_entry {
 } __packed;
 
 
+/* ip_addr is BE byte order. */
 struct nd_entry_v0 {
 	uint8_t client_id[16];
 	uint32_t ip_addr;

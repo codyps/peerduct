@@ -31,6 +31,7 @@ int nd_parse_init(struct nd_parse_ctx *npc)
 }
 
 #define le16ton(x) htons(le16toh(x))
+#define le32ton(x) htonl(le32toh(x))
 
 static struct peer *mk_kad_peer(struct nd_entry *entry)
 {
@@ -77,8 +78,11 @@ static struct peer *mk_kad_peer_v0(struct nd_entry_v0 *entry)
 	kp->udp.sin_port = le16ton(entry->udp_port);
 	kp->tcp.sin_port = le16ton(entry->tcp_port);
 
-	kp->udp.sin_addr.s_addr = le16ton(entry->ip_addr);
-	kp->tcp.sin_addr.s_addr = le16ton(entry->ip_addr);
+	/* stored as BE aka Network byte order.
+	 * sockaddr_in expects network byte order.
+	 * all is well. */
+	kp->udp.sin_addr.s_addr = entry->ip_addr;
+	kp->tcp.sin_addr.s_addr = entry->ip_addr;
 
 	kp->peer.type = PT_KAD;
 	kp->peer.next = NULL;
@@ -99,7 +103,7 @@ static int header_parser(struct nd_parse_ctx *npc, void *buf, size_t len)
 		consumed += cpy_sz;
 
 		if (npc->head_pos >= sizeof(uint32_t)) {
-			if (!npc->head.zero) {
+			if (npc->head.zero) {
 				npc->version = 0;
 				npc->nr_total = le32toh(npc->head.zero);
 				npc->header_parsed = true;
@@ -179,6 +183,8 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 		memcpy(start_cpy, buf, cpy_len);
 
 		pos += cpy_len;
+		len -= cpy_len;
+		buf += cpy_len;
 
 		if (likely(pos == goal_len)) {
 			/* we filled this entry, deserialize it
@@ -199,13 +205,14 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len)
 			pos = 0;
 			*(npc->tail) = p;
 			npc->tail = &(p->next);
+			consumed += cpy_len;
 
 		} else {
 			/* entry not filled but data done.
 			 * update things for next time */
 			npc->cur_e_pos = pos;
 			npc->nr_consumed = nr;
-			return consumed;
+			return consumed + cpy_len;
 		}
 	}
 

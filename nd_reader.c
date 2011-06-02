@@ -17,7 +17,7 @@ void print_kad_peers(struct peer *peer)
 				serv, sizeof(serv),
 				NI_NUMERICHOST | NI_NUMERICSERV);
 
-		printf("%s %s\n", host, serv);
+		printf("%15s %s\n", host, serv);
 
 		peer = peer->next;
 	}
