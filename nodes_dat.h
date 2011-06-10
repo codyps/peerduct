@@ -74,25 +74,25 @@ struct nd_parse_ctx {
 /**
  * nd_parse_init - sets up the nd_parse_ctx for processing.
  *
- * @npc - an uninitialized nd_parse_ctx.
+ * @npc: an uninitialized nd_parse_ctx.
  *
- * @return - 0 on success, -1 on failure.
+ * return: 0 on success, -1 on failure.
  */
 int nd_parse_init(struct nd_parse_ctx *npc);
 
 /**
  * nd_parse_proc - processes the given buffer. Indicates completion of the
- *                  parse based on the amount it indicates it consumed.
+ *                 parse based on the amount it indicates it consumed.
  *
- * @npc - an initialized nd_parse_ctx.
- * @buf - a buffer containing nd data (which may continue the nd data
- *        passed in a previous call to nd_parse_proc).
- * @len - the length of @buf.
+ * @npc: an initialized nd_parse_ctx.
+ * @buf: a buffer containing nd data (which may continue the nd data
+ *       passed in a previous call to nd_parse_proc).
+ * @len: the length of @buf.
  *
- * @return - <0 on error. Otherwise, the number of bytes of buf read.
- *           If the parsing is still in progress, this will be equal
- *           to @len. If the parsing is completed, it will be some value
- *           less than @len.
+ * return: <0 on error. Otherwise, the number of bytes of buf read.
+ *         If the parsing is still in progress, this will be equal
+ *         to @len. If the parsing is completed, it will be some value
+ *         less than @len indicating the number of bytes consumed.
  */
 int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len);
 
@@ -102,9 +102,10 @@ int nd_parse_proc(struct nd_parse_ctx *npc, void *buf, size_t len);
  *                      calling nd_parse_get_peers a second time without
  *                      further parsing taking place will return 0 peers.
  *
- * @npc - the context from which the peers are removed.
+ * @npc: the context from which the peers are removed.
  *
- * @return - a heap allocated list of peers.
+ * return: a heap allocated list of peers which may be freed with
+ * 	   free_peers()
  */
 struct peer *nd_parse_get_peers(struct nd_parse_ctx *npc);
 
@@ -113,7 +114,7 @@ struct peer *nd_parse_get_peers(struct nd_parse_ctx *npc);
  *                    This excludes any peers removed from the parse context
  *                    by a call to nd_parse_get_peers.
  *
- * @npc - ctx to be destroyed.
+ * @npc: ctx to be destroyed.
  */
 void nd_parse_destroy(struct nd_parse_ctx *npc);
 

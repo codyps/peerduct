@@ -6,6 +6,7 @@
 
 #include "nodes_dat.h"
 
+/* endian.h usage */
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
