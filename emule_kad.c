@@ -90,3 +90,47 @@
  * uint8_t opcode = data[1];
  * const uint8_t *pkt_data = data + 2;
  * uint32_t len_pkt = len_data - 2;
+ *
+ */
+
+/* legacy-challeng ip port contactID =
+ * 
+ * if has_active_legacy_challenge ip
+ * 	return
+ *
+ * packetdata <<
+ * 	@# 8 KADEMLIA_FIND_VALUE
+ * 	@# 128 ( rand_128 ? : 1 )
+ *	@# 128 contactID
+ *
+ * send packetdata KADEMLIA2_REQ ip port 0 NULL
+ * track_challenge contactID challenge ip KADEMLIA2_REQ
+ */
+
+/* expire_immed :: CKadClientSearcher
+ * expire_client_search expire_immed =`
+ * 	scan a list of fetchNodeID requests for expire_immed and remove if found.
+ * 	additionally, check if any requests in this list have timed out
+ */
+
+/* find_node_id_by_ip :: CKadClientSearcher -> uint32_t -> tcpPort -> udpPort
+ * 
+ * > send_my_details KADEMLIA@_HELLO_REQ ip udpPort 1 0 NULL false // note about unbfuscateness
+ * > FetchNodeID_Struct sRequest = { ip, tcpPort, ::GetTickCount() + SEC2MS(60), requester };
+ * add sRequest to list of fetchNodeIDRequests
+ *
+ */
+
+/* send_packet :: CMemFile& -> uint8_t -> uint32_t -> uint16_t -> CKadUDPKey& -> CUInt128*
+ * send_packet    data         opcode     dest_host   dest_port   target_key     crypt_target_id =
+ * 
+ * track_out_packet dest_host opcode
+ * packet = CPacket(data, OP_KADEMLIAHEADER, opcode)
+ * if (sizeof packet) > 200
+ * 	pack packet
+ *
+ * uint8_t cryptData[16]
+ * uint8_t *cryptKey
+ *
+ *
+ */
