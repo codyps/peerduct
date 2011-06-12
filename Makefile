@@ -5,9 +5,10 @@ RM = rm -f
 all: build
 
 
-TARGETS = pd nd_reader
+TARGETS = pd nd_reader test_list
 pd: main.c.o
 nd_reader: nd_reader.c.o nodes_dat.c.o peer.c.o
+test_list: list_test.c.o
 
 srcdir = .
 VPATH = $(srcdir)
