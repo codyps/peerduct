@@ -1,7 +1,7 @@
-#ifndef EC_H_
-#define EC_H_
+#ifndef MULE_EC_H_
+#define MULE_EC_H_
 /*!
- * External Connection Protocol, *Mule's communication protocol.
+ * External Connection Protocol, *Mule's communication protocol, application layer.
  *
  * Data Types (from amule/docs/EC_Protocol.txt)
  * 	integer types: u8, be16, be32
@@ -22,7 +22,7 @@ struct ec_pkt {
 };
 
 /*!
- * @group ec_opcode.h
+ * @group ec_opcode
  * Defines opcodes as well as related types and methods for the External
  * Connections (EC) protocol used by *Mule
  */
