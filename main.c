@@ -11,7 +11,7 @@
 
 static const char optstr[] = ":p:f:l:";
 
-int warn(char *fmt, ...)
+static int warn(char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
@@ -20,7 +20,7 @@ int warn(char *fmt, ...)
 	return x;
 }
 
-void usage(char *pname)
+static void usage(char *pname)
 {
 	warn(
 		"usage: %s	[options]\n"
@@ -33,6 +33,31 @@ void usage(char *pname)
 		"			ipv6 - [ip]:port, ip, host, host:port\n"
 	    , pname);
 
+}
+
+
+struct peer_addr {
+	char *host;
+	uint16_t port;
+};
+
+
+int peer_str_to_addr(char *in_str, struct peer_addr *pa)
+{
+	/* TODO: parse in_str, determine */
+}
+
+struct peer_args {
+	
+};
+
+static void *peer_thread(void *pa_v)
+{
+	struct peer_args *pa = pa_v;
+
+
+
+	return NULL;
 }
 
 int main(int argc, char **argv)

@@ -30,7 +30,8 @@ struct ec_pkt {
 typedef uint8_t ec_opcode_t;
 
 enum ec_opcode_e {
-	
+	EC_OP_AUTH_REQ = 0x02
+
 };
 
 
@@ -47,6 +48,31 @@ struct ec_tag {
 				  space */
 };
 
+enum ec_tag_e {
+	EC_TAG_CLIENT_NAME = 0x06,
+	EC_TAG_PASSWD_HASH = 0x04,
+	EC_TAG_PROTOCOL_VERSION = 0x0c,
+	EC_TAG_CLIENT_VERSION = 0x08,
+	EC_TAG_VERSION_ID = 0x0e	
+};
 
+enum ec_tagtype_e {
+	EC_TAGTYPE_HASH16 = 0x01,
+	EC_TAGTYPE_STRING = 0x02,
+	EC_TAGTYPE_UINT32,
+	EC_TAGTYPE_FLOAT32,
+	EC_TAGTYPE_BOOL,
+	EC_TAGTYPE_BOOLARRAY,
+	EC_TAGTYPE_BLOB,
+	EC_TAGTYPE_UINT16,
+	EC_TAGTYPE_UINT8,
+	EC_TAGTYPE_BSOB,
+	EC_TAGTYPE_UINT64,
+
+	EC_TAGTYPE_STR1 = 0x11,
+
+	/* Sequential to STR22, only up to STR16 should be used. */
+
+};
 
 #endif
