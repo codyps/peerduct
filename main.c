@@ -45,6 +45,7 @@ struct peer_addr {
 int peer_str_to_addr(char *in_str, struct peer_addr *pa)
 {
 	/* TODO: parse in_str, determine */
+	return -1;
 }
 
 struct peer_args {
