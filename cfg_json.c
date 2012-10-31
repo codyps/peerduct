@@ -6,29 +6,38 @@
 
 #include <string.h> /* strlen */
 
-static void get_id(struct j_config *cfg)
+static int base64_decode(void *dst, size_t dst_sz, const char *src, size_t src_sz)
 {
-	const char * path[] = { "self", "id", NULL };
+	/* TODO: is there some good code for this? some standard lib? (openssl
+	 * has it, though it seems a silly reason to pull in all of openssl) */
+
+	return -1;
+}
+
+int config_get_id(struct config *cfg, struct kademlia_id *id)
+{
+	const char * path[] = { "id", NULL };
 	yajl_val v = yajl_tree_get(cfg->root, path, yajl_t_string);
 	if (v) {
-		cfg->id = YAJL_GET_STRING(v);
-		fprintf(stderr, "got id %s\n", cfg->id);
+		char *id_str = YAJL_GET_STRING(v);
+
+		return base64_decode(id->bytes, sizeof(id->bytes), id_str, strlen(id_str));
 	} else {
-		fprintf(stderr, "need to generate id");
+		return -1;
 	}
 }
 
-static void get_peers(struct j_config *cfg)
+static void get_peers(struct config *cfg)
 {
 	/* belh */
 }
 
-void j_config_destroy(struct j_config *cfg)
+void config_destroy(struct config *cfg)
 {
 	yajl_tree_free(cfg->root);
 }
 
-int j_config_load(struct j_config *cfg, char *config_file)
+int config_load(struct config *cfg, char *config_file)
 {
 	char file_data[65536];
 	char errbuf[1024];
@@ -60,7 +69,6 @@ int j_config_load(struct j_config *cfg, char *config_file)
 	}
 	
 
-	get_id(cfg);
 	get_peers(cfg);
 
 	return 0;
