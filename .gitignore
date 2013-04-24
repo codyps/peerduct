@@ -1,4 +1,10 @@
+/.TRACK-*
+
+/nd_reader
+/test_list
+/pd
+
 *~
-*.o
-*.d
+.*.swp
+*.[oda]
 *.exe

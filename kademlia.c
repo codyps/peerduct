@@ -26,7 +26,8 @@ struct kademlia_bucket {
  * Returns 0 when the contact was inserted successfuly. -1 when a failure to
  * insert occoured. 1 when the contact already exsisted.
  */
-int kbucket_contact_insert(struct kademlia_bucket *bucket, struct kademlia_contact const *contact)
+int kbucket_contact_insert(struct kademlia_bucket *bucket,
+		struct kademlia_contact const *contact)
 {
 	struct kademlia_contact *c = find_contact(bucket, contact);
 	if (c) {
@@ -38,12 +39,10 @@ int kbucket_contact_insert(struct kademlia_bucket *bucket, struct kademlia_conta
 		c = copy_contact(contact);
 		if (!c)
 			return -2;
-	
 		bucket->contact_ct ++;
 	}
-	
-	list_add(c->list, bucket->contacts);
 
+	list_add(c->list, bucket->contacts);
 	return 0;
 }
 
