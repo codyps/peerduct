@@ -1,20 +1,19 @@
 Peerduct
 ========
 
-A peer to peer protocol written with NAT in mind (as well as ipv6
-compatability).
-
-
- * Kadmelia
- 	* ed2k
-	* Bittorrent DHT
-
-
-Considerations
---------------
-
- * Kadmelia/KAD (ed2k)?
- * Something via udp?
- * Gnutella is also popular.
-
+ - Bittorrent DHT
+   - bt_dht.c
+   - DHT, Kademlia based.
+ - tribbler
+   - extentions to Bittorrent DHT.
+ - Kad (ed2k)
+   - DHT, Kademlia based.
+ - Vuze
+   - DHT
+ - overnet (ed2k)
+ - gnunet
+ - freenet
+ - gnutella
+   - has a DHT as an extention
+ - gnutella2
 

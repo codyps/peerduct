@@ -241,7 +241,7 @@ static struct peer *add_peer(EV_P_ struct sock *s, char *name, char *service)
 	return p;
 }
 
-/* 'a' 'e' 'q' 'r' 't' 'y'
+/* 'a' 'e' 'q' 'r' 't' 'v' 'y'
  * a: arguments for a query, dict.
  * e: list of a number and a string
  * q: string containing a queury name
