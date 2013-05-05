@@ -1,6 +1,8 @@
 #ifndef PEER_H_
 #define PEER_H_
 
+#include <ccan/ccan/container_of.h>
+
 /* struct sockaddr_storage */
 #include <netinet/in.h>
 
@@ -47,20 +49,17 @@ struct kad_peer {
 	struct peer peer;
 
 	uint8_t client_id[16];
-	uint8_t  kad_udp_key[8]; 
+	uint8_t  kad_udp_key[8];
 
 	struct sockaddr_in udp;
 	struct sockaddr_in tcp;
-	
+
 	uint8_t  verified; /* non-zero value indicates verified. */
 	uint8_t  version;  /* 0 = kad v1, non-zero indicates v2 and is a
 			      featured bitmask */
 };
 
-
-#include "useful.h"
 #define kad_peer_from_peer(p) container_of(p, struct kad_peer, peer)
-
 void free_kad_peers(struct peer *peer);
 
 #endif

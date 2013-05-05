@@ -31,7 +31,7 @@ struct nd_entry {
 	uint16_t udp_port;
 	uint8_t  version;  /* 0 = kad v1, non-zero indicates v2 and is a
 			      feature bitmask */
-	uint8_t  kad_udp_key[8]; 
+	uint8_t  kad_udp_key[8];
 	uint8_t  verified; /* non-zero value indicates verified. */
 } __packed;
 

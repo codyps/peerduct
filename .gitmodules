@@ -10,3 +10,6 @@
 [submodule "rbtree"]
 	path = rbtree
 	url = https://github.com/jmesmon/rbtree.git
+[submodule "tbl"]
+	path = tbl
+	url = https://github.com/femtoo/tbl.git

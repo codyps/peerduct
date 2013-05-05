@@ -1,18 +1,24 @@
 /* Another kademlia variant */
 #include <stdio.h>
 
+#include <ccan/compiler/compiler.h>
 #include <ccan/darray/darray.h>
 #include <ccan/err/err.h>
-#include <ccan/net/net.h>
 #include <ccan/list/list.h>
+#include <ccan/net/net.h>
+
 #include <rbtree/rbtree.h>
+
 #include <penny/print.h>
+#include <penny/mem.h>
 
 #include <ev.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+
+#include "ben.h"
 
 /* XXX: because bucket splitting is deterministic, there should be a way
  * to track it without start & end. */
@@ -32,84 +38,349 @@ typedef struct bt_node_id {
 	char id[160/8]; /* 20 */
 } bt_node_id;
 
-enum KRPC_ERROR {
+enum krpc_error {
 	KE_GENERIC = 201,
 	KE_SERVER = 202,
 	KE_PROTOCOL = 203,
 	KE_UNK_METHOD = 204
 };
 
-static void dict_begin(darray_char *d)
+enum krpc_query {
+	KQ_NONE,
+	KQ_PING,
+	KQ_FIND_NODE,
+	KQ_GET_PEERS,
+	KQ_ANNOUNCE_PEER,
+};
+
+enum krpc_type {
+	KT_NONE,
+	KT_QUERY,
+	KT_RESPONSE,
+	KT_ERROR
+};
+
+struct krpc_msg {
+	enum krpc_type  type;
+	enum krpc_query query;
+
+	long long error_code;
+	char *error;
+	size_t error_len;
+
+	char *id;
+	size_t id_len;
+
+	char *trans_id; /* "t" */
+	size_t trans_id_len;
+
+	char *nodes;
+	size_t nodes_len;
+
+	char *target;
+	size_t target_len;
+
+	char *info_hash;
+	size_t info_hash_len;
+
+	char *token;
+	size_t token_len;
+};
+
+/* 'a' 'e' 'q' 'r' 't' 'v' 'y'
+ * a: arguments for a query, dict.
+ * e: list of a number and a string
+ * q: string containing a queury name
+ * 	"ping"
+ * 	"find_node"
+ * 	"get_peers"
+ * 	"announce_peer"
+ * r: the 'response' version of @a
+ * t: a transaction ID, string of bytes.
+ * y: "q", "r", or "e" to indicate the message type (query, response, or error)
+ * 
+ * = Non-standard =
+ * v: 4 byte string where the first 2 bytes id the client and the second 2 the version.
+ */
+struct krpc_msg_parse {
+	struct krpc_msg *msg;
+
+	/* allow at most 32 levels of nesting */
+	uint_least32_t is_dict_bits;
+	int depth;
+
+	int key;
+	char **value;
+	size_t *value_len;
+
+	bool in_args;
+	char *arg;
+	size_t arg_len;
+};
+
+#define VAR_HIGH_BIT(x) HIGH_BIT(typeof(x))
+#define HIGH_BIT(type) (((type)-1) & ((type)-1>>1))
+
+static bool kmp_depth_is_dict(struct krpc_msg_parse *kmp)
 {
-	darray_append(*d, 'd');
+	return !!(kmp->is_dict_bits & (1 << (kmp->depth - 1)));
 }
 
-static void dict_end(darray_char *d)
+static int krpc_msg_parse_type(struct krpc_msg_parse *kmp, char *value, size_t len)
 {
-	darray_append(*d, 'e');
+	if (len != 1)
+		return -1;
+	if (kmp->msg->type != KT_NONE)
+		return -1;
+
+	int v = *value;
+	switch (v) {
+	case 'e':
+		v = KT_ERROR;
+		break;
+	case 'q':
+		v = KT_QUERY;
+		break;
+	case 'r':
+		v = KT_RESPONSE;
+		break;
+	default:
+		return -1;
+	}
+
+	kmp->msg->type = v;
+	return 0;
 }
 
-static void encode_bytes(darray_char *d, const char *bytes, size_t len)
+#define memeqstr(bytes, length, string) memeq(bytes, length, string, strlen(string))
+
+static int krpc_msg_parse_query(struct krpc_msg_parse *kmp, char *value, size_t len)
 {
-	darray_printf(*d, "%zu:%*s", len, len, bytes);
+	if (kmp->msg->query != KQ_NONE)
+		return -1;
+
+	if (memeqstr(value, len, "ping")) {
+		kmp->msg->query = KQ_PING;
+	} else if (memeqstr(value, len, "find_node")) {
+		kmp->msg->query = KQ_FIND_NODE;
+	} else if (memeqstr(value, len, "get_peers")) {
+		kmp->msg->query = KQ_GET_PEERS;
+	} else if (memeqstr(value, len, "announce_peer")) {
+		kmp->msg->query = KQ_ANNOUNCE_PEER;
+	} else
+		return -1;
 }
 
-static void encode_string(darray_char *d, const char *str)
+static int krpc_msg_parse_trans_id(struct krpc_msg_parse *kmp, char *value, size_t len)
 {
-	encode_bytes(d, str, strlen(str));
+	if (kmp->msg->trans_id)
+		return -1;
+
+	kmp->msg->trans_id = value;
+	kmp->msg->trans_id_len = len;
+
+	return 0;
+}
+
+static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp->depth == 0)
+		return -1;
+
+	if (kmp->depth == 1 && kmp_depth_is_dict(kmp)) {
+		switch (kmp->key) {
+		case 'a':
+			return -1;
+		case 'e':
+			return -1;
+		case 'r':
+			return -1;
+		case 'q':
+			return krpc_msg_parse_query_str(kmp, value, length);
+		case 't':
+			return krpc_msg_parse_trans_id(kmp, value, length);
+		case 'y':
+			return krpc_msg_parse_type(kmp, value, length);
+		case 'v':
+		default:
+			/* ignore */
+		}
+	} else if (kmp->depth == 2) {
+		if (!kmp_depth_is_dict(kmp)) {
+			/* error? */
+			if (!kmp->key != 'e')
+				return 0;
+
+		} else {
+			/* args? */
+		}
+	}
+}
+
+static int krpc_msg_parse_integer(void *ctx, long long value)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp->depth == 0)
+		return -1;
+}
+
+static int krpc_msg_parse_list_start(void *ctx, char *value, size_t length)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp->depth == 0)
+		return -1;
+	if (kmp_depth_inc(kmp, false))
+		return -1;
+}
+
+static int krpc_msg_parse_list_end(void *ctx)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp->depth == 0)
+		return -1;
+	if (kmp_depth_dec(kmp, false))
+		return -1;
+}
+
+static int kmp_depth_inc(struct krpc_msg_parse *kmp, bool is_dict)
+{
+	kmp->depth++;
+	if (kmp->depth > 32) /* we 1 index here */
+		return -1;
+	if (is_dict)
+		kmp->is_dict_bits |= 1 << (kmp->depth - 1);
+	else
+		kmp->is_dict_bits &= ~(1 << (kmp->depth - 1));
+	return 0;
+}
+
+static int kmp_depth_dec(struct krpc_msg_parse *kmp, bool is_dict)
+{
+	if (!kmp->depth)
+		return -1;
+	bool was_dict = kmp_depth_is_dict(kmp);
+	if (was_dict != is_dict)
+		return -1;
+
+	kmp->depth--;
+	return 0;
+}
+
+static int krpc_msg_parse_dict_start(void *ctx)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp_depth_inc(kmp, true))
+		return -1;
+	return 0;
+}
+
+static int krpc_msg_parse_dict_key(void *ctx, char *key, size_t length)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp->depth == 1) {
+		if (length != 1)
+			return 0;
+
+		int k = *key;
+		/* 'a' 'e' 'q' 'r' 't' 'v' 'y' */
+		switch (k) {
+		case 'a':
+		case 'e':
+		case 'q':
+		case 'r':
+		case 't':
+		case 'v':
+		case 'y':
+			kmp->key = k;
+			break;
+		default:
+			kmp->key = '\0';
+			break;
+		}
+	} else if (kmp->depth == 2 && kmp->in_args) {
+		/* nodes, target, id */
+	}
+
+	return 0;
+}
+
+static int krpc_msg_parse_dict_end(void *ctx)
+{
+	struct krpc_msg_parse *kmp = ctx;
+	if (kmp_depth_dec(kmp, true))
+		return -1;
+	return 0;
+}
+
+struct tbl_callbacks krpc_msg_parse_callbacks {
+	.integer = krpc_msg_parse_integer,
+	.string  = krpc_msg_parse_string,
+	.list_start = krpc_msg_parse_list_start,
+	.list_end = krpc_msg_parse_list_end,
+	.dict_start = krpc_msg_parse_dict_start,
+	.dict_key = krpc_msg_parse_dict_key,
+	.dict_end = krpc_msg_parse_dict_end,
+};
+
+static krpc_msg_parse(struct krpc_msg *msg, const void *data, size_t data_len)
+{
+	int r = tbl_parse(data, data_len, 
 }
 
 static void encode_id(darray_char *d, bt_node_id *id)
 {
-	encode_bytes(d, id->id, sizeof(id->id));
+	ben_string(d, id->id, sizeof(id->id));
 }
 
-static void encode_ping(darray_char *d, bt_node_id *id)
+static void krpc_gen_ping(darray_char *d, bt_node_id *id, const void *msg_id,
+		size_t msg_id_len)
 {
-	dict_begin(d);
+	ben_dict_begin(d);
 
 	/* a = { "id" : MY_NODE_ID } */
-	encode_string(d, "a");
-	dict_begin(d);
-	encode_string(d, "id");
+	ben_string_c(d, "a");
+	ben_dict_begin(d);
+	ben_string_c(d, "id");
 	encode_id(d, id);
-	dict_end(d);
+	ben_dict_end(d);
 
 	/* q = "ping" */
-	encode_string(d, "q");
-	encode_string(d, "ping");
+	ben_string_c(d, "q");
+	ben_string_c(d, "ping");
 
 	/* t = SOME_ID */
-	encode_string(d, "t");
-	encode_string(d, "tt"); /* some ID */
+	ben_string_c(d, "t");
+	ben_string(d, msg_id, msg_id_len); /* some ID */
 
 	/* y = "q" */
-	encode_string(d, "y");
-	encode_string(d, "q");
+	ben_string_c(d, "y");
+	ben_string_c(d, "q");
 
-	dict_end(d);
+	ben_dict_end(d);
 }
 
-static void encode_ping_response(darray_char *d, bt_node_id *my_id)
+static void krpc_gen_ping_response(darray_char *d, bt_node_id *my_id,
+		const void *msg_id, size_t msg_id_len)
 {
-	dict_begin(d);
+	ben_dict_begin(d);
 
 	/* r */
-	encode_string(d, "r");
-	dict_begin(d);
-	encode_string(d, "id");
+	ben_string_c(d, "r");
+	ben_dict_begin(d);
+	ben_string_c(d, "id");
 	encode_id(d, my_id);
-	dict_end(d);
+	ben_dict_end(d);
 
 	/* t = SOME_ID */
-	encode_string(d, "t");
-	encode_string(d, "tt"); /* some id */
+	ben_string_c(d, "t");
+	ben_string(d, msg_id, msg_id_len); /* some id */
 
 	/* y */
-	encode_string(d, "y");
-	encode_string(d, "r");
+	ben_string_c(d, "y");
+	ben_string_c(d, "r");
 
-	dict_end(d);
+	ben_dict_end(d);
 }
 
 static void load_random_id(bt_node_id *id)
@@ -156,7 +427,7 @@ static void send_ping_to_peer(struct peer *p)
 	struct sock *s = p->parent;
 
 	darray_reset(s->buf);
-	encode_ping(&s->buf, &s->my_id);
+	krpc_gen_ping(&s->buf, &s->my_id, "tt", 2);
 
 	printf("pinging %s:%s ::", p->name, p->service);
 	print_bytes_as_cstring(s->buf.item, darray_size(s->buf), stdout);
@@ -196,6 +467,7 @@ static void sock_cb(EV_P_ ev_io *w, int revents)
 	if (l == -1) {
 		warnx("recvfrom");
 	}
+
 
 	printf("recv'd packet of size %zd, sockaddr size \n", l);
 	print_bytes_as_cstring(buf, l, stdout);

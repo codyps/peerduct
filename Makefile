@@ -15,7 +15,7 @@ obj-pd = main.o
 obj-nd_reader = nd_reader.o nodes_dat.o peer.o
 obj-test_list = list_test.o
 #TARGETS = pd nd_reader test_list nnode
-obj-bt = bt_dht.o rbtree/rbtree.o
+obj-bt = bt_dht.o rbtree/rbtree.o tbl/tbl.o
 TARGETS = bt
 bt : ccan
 
