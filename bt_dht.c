@@ -221,56 +221,86 @@ static int krpc_msg_parse_trans_id(struct krpc_msg_parse *kmp, char *value, size
 	return 0;
 }
 
+static int krpc_msg_parse_string_arg(struct krpc_msg_parse *kmp, char *value, size_t len)
+{
+	if (memeqstr(value, len, "id")) {
+
+	} else if (memeqstr(value, len, "info_hash")) {
+
+	} else if (memeqstr(value, len, "target")) {
+
+	} else if (memeqstr(value, len, "implied_port")) {
+
+	} else if (memeqstr(value, len, "port")) {
+
+	}
+}
+
+static int krpc_msg_parse_response(
+
 static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
 {
 	struct krpc_msg_parse *kmp = ctx;
+	struct krpc_msg_parse_level *l = &kmp->levels[kmp->depth];
+	int ret = 0;
 	if (kmp->depth == 0)
 		return -1;
 
 	if (kmp->depth == 1 && kmp_depth_is_dict(kmp)) {
-		if (kmp->levels[kmp->depth].key_len != 1)
+		if (l->key_len != 1)
 			goto out;
 
-		switch (*kmp->levels[kmp->depth].key) {
+		switch (*l->key) {
+		case 'q':
+			ret = krpc_msg_parse_query(kmp, value, length);
+			break;
+		case 't':
+			ret = krpc_msg_parse_trans_id(kmp, value, length);
+			break;
+		case 'y':
+			ret =  krpc_msg_parse_type(kmp, value, length);
+			break;
 		case 'a':
 		case 'e':
 		case 'r':
 			/* these are not supposed to be strings */
 			return -1;
-		case 'q':
-			return krpc_msg_parse_query(kmp, value, length);
-		case 't':
-			return krpc_msg_parse_trans_id(kmp, value, length);
-		case 'y':
-			return krpc_msg_parse_type(kmp, value, length);
-		case 'v':
-		default:
-			/* ignore */
+		/* case 'v': */
+		/* ignore */
 		}
 	} else if (kmp->depth == 2) {
 		if (!kmp_depth_is_dict(kmp)) {
 			/* error? */
-			if (kmp->levels[kmp->depth].key_len != 1
-					&& *kmp->levels[kmp->depth].key != 'e')
+			if (l->key_len != 1 && *l->key != 'e')
 				goto out;
 
 			/* nothing but the 2nd elem can be a string */
 			if (kmp_idx(kmp) != 1)
 				return -1;
 
-			return kmp_msg_parse_error_str(kmp, value, length);
+			ret = krpc_msg_parse_error_str(kmp, value, length);
 		} else {
-			/* args? */
+			struct krpc_msg_parse_level *pl =
+				&kmp->levels[kmp->depth];
+			if (pl->key_len != 1)
+				goto out;
+			switch (*pl->key) {
+			case 'a':
+				/* args */
+				ret = krpc_msg_parse_args(kmp, value, length);
+				break;
+			case 'r':
+				/* response */
+				ret = krpc_msg_parse_response(kmp, value, length);
+			}
 		}
 	} else if (kmp->depth == 3) {
 		/* some types of args do this */
 	}
 
-	/* not something we care about */
-
 out:
 	kmp_idx_inc(kmp);
-	return 0;
+	return ret;
 }
 
 static int krpc_msg_parse_integer(void *ctx, long long value)
