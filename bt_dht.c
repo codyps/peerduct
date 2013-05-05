@@ -102,31 +102,71 @@ struct krpc_msg {
  * = Non-standard =
  * v: 4 byte string where the first 2 bytes id the client and the second 2 the version.
  */
+
+enum ben_type {
+	BT_NONE,
+	BT_LIST,
+	BT_DICT
+};
+
+struct krpc_msg_parse_level {
+	enum ben_type type;
+	unsigned idx;
+
+	/* only used for dicts */
+	char *key;
+	size_t key_len;
+};
+
 struct krpc_msg_parse {
 	struct krpc_msg *msg;
 
-	/* allow at most 32 levels of nesting */
-	uint_least32_t is_dict_bits;
+	struct krpc_msg_parse_level levels[32];
 	int depth;
-
-	int key;
-	char **value;
-	size_t *value_len;
-
-	bool in_args;
-	char *arg;
-	size_t arg_len;
 };
-
-#define VAR_HIGH_BIT(x) HIGH_BIT(typeof(x))
-#define HIGH_BIT(type) (((type)-1) & ((type)-1>>1))
 
 static bool kmp_depth_is_dict(struct krpc_msg_parse *kmp)
 {
-	return !!(kmp->is_dict_bits & (1 << (kmp->depth - 1)));
+	return kmp->levels[kmp->depth] == BT_DICT;
 }
 
-static int krpc_msg_parse_type(struct krpc_msg_parse *kmp, char *value, size_t len)
+static unsigned kmp_idx(struct krpc_msg_parse *kmp)
+{
+	return kmp->levels[kmp->depth].idx;
+}
+
+static int kmp_depth_inc(struct krpc_msg_parse *kmp, bool is_dict)
+{
+	kmp->depth++;
+	if (kmp->depth >= ARRAY_SIZE(kmp->levels))
+		return -1;
+	if (is_dict)
+		kmp->levels[kmp->depth]->type = BT_DICT;
+	else
+		kmp->levels[kmp->depth]->type = BT_LIST;
+	kmp->levels[kmp->depth]->idx = 0;
+	return 0;
+}
+
+static int kmp_depth_dec(struct krpc_msg_parse *kmp, bool is_dict)
+{
+	if (!kmp->depth)
+		return -1;
+	bool was_dict = kmp_depth_is_dict(kmp);
+	if (was_dict != is_dict)
+		return -1;
+
+	kmp->depth--;
+	return 0;
+}
+
+static void kmp_idx_inc(struct krpc_msg_parse *kmp)
+{
+	kmp->levels[kmp->depth]->idx ++;
+}
+
+static int krpc_msg_parse_type(struct krpc_msg_parse *kmp,
+		char *value, size_t len)
 {
 	if (len != 1)
 		return -1;
@@ -152,9 +192,8 @@ static int krpc_msg_parse_type(struct krpc_msg_parse *kmp, char *value, size_t l
 	return 0;
 }
 
-#define memeqstr(bytes, length, string) memeq(bytes, length, string, strlen(string))
-
-static int krpc_msg_parse_query(struct krpc_msg_parse *kmp, char *value, size_t len)
+static int krpc_msg_parse_query(struct krpc_msg_parse *kmp,
+		char *value, size_t len)
 {
 	if (kmp->msg->query != KQ_NONE)
 		return -1;
@@ -189,15 +228,17 @@ static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
 		return -1;
 
 	if (kmp->depth == 1 && kmp_depth_is_dict(kmp)) {
-		switch (kmp->key) {
+		if (kmp->levels[kmp->depth].key_len != 1)
+			goto out;
+
+		switch (*kmp->levels[kmp->depth].key) {
 		case 'a':
-			return -1;
 		case 'e':
-			return -1;
 		case 'r':
+			/* these are not supposed to be strings */
 			return -1;
 		case 'q':
-			return krpc_msg_parse_query_str(kmp, value, length);
+			return krpc_msg_parse_query(kmp, value, length);
 		case 't':
 			return krpc_msg_parse_trans_id(kmp, value, length);
 		case 'y':
@@ -209,13 +250,27 @@ static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
 	} else if (kmp->depth == 2) {
 		if (!kmp_depth_is_dict(kmp)) {
 			/* error? */
-			if (!kmp->key != 'e')
-				return 0;
+			if (kmp->levels[kmp->depth].key_len != 1
+					&& *kmp->levels[kmp->depth].key != 'e')
+				goto out;
 
+			/* nothing but the 2nd elem can be a string */
+			if (kmp_idx(kmp) != 1)
+				return -1;
+
+			return kmp_msg_parse_error_str(kmp, value, length);
 		} else {
 			/* args? */
 		}
+	} else if (kmp->depth == 3) {
+		/* some types of args do this */
 	}
+
+	/* not something we care about */
+
+out:
+	kmp_idx_inc(kmp);
+	return 0;
 }
 
 static int krpc_msg_parse_integer(void *ctx, long long value)
@@ -223,6 +278,23 @@ static int krpc_msg_parse_integer(void *ctx, long long value)
 	struct krpc_msg_parse *kmp = ctx;
 	if (kmp->depth == 0)
 		return -1;
+
+	/* XXX: unlike parse_string(), I don't bother erroring when
+	 * and integer is used in an invalid field */
+
+	/* the only place I care about an integer is in the "error" context */
+	if (kmp->depth != 2
+			|| kmp_depth_is_dict(kmp)
+			|| kmp->levels[kmp->depth].idx != 0
+			|| kmp->levels[kmp->depth - 1].key_len != 1
+			|| kmp->levels[kmp->depth - 1].key != 'e')
+		goto out;
+
+	kmp->msg->error_code = value;
+
+out:
+	kmp_idx_inc(kmp);
+	return 0;
 }
 
 static int krpc_msg_parse_list_start(void *ctx, char *value, size_t length)
@@ -232,6 +304,7 @@ static int krpc_msg_parse_list_start(void *ctx, char *value, size_t length)
 		return -1;
 	if (kmp_depth_inc(kmp, false))
 		return -1;
+	return 0;
 }
 
 static int krpc_msg_parse_list_end(void *ctx)
@@ -241,29 +314,7 @@ static int krpc_msg_parse_list_end(void *ctx)
 		return -1;
 	if (kmp_depth_dec(kmp, false))
 		return -1;
-}
-
-static int kmp_depth_inc(struct krpc_msg_parse *kmp, bool is_dict)
-{
-	kmp->depth++;
-	if (kmp->depth > 32) /* we 1 index here */
-		return -1;
-	if (is_dict)
-		kmp->is_dict_bits |= 1 << (kmp->depth - 1);
-	else
-		kmp->is_dict_bits &= ~(1 << (kmp->depth - 1));
-	return 0;
-}
-
-static int kmp_depth_dec(struct krpc_msg_parse *kmp, bool is_dict)
-{
-	if (!kmp->depth)
-		return -1;
-	bool was_dict = kmp_depth_is_dict(kmp);
-	if (was_dict != is_dict)
-		return -1;
-
-	kmp->depth--;
+	kmp_idx_inc(kmp);
 	return 0;
 }
 
@@ -278,29 +329,9 @@ static int krpc_msg_parse_dict_start(void *ctx)
 static int krpc_msg_parse_dict_key(void *ctx, char *key, size_t length)
 {
 	struct krpc_msg_parse *kmp = ctx;
-	if (kmp->depth == 1) {
-		if (length != 1)
-			return 0;
 
-		int k = *key;
-		/* 'a' 'e' 'q' 'r' 't' 'v' 'y' */
-		switch (k) {
-		case 'a':
-		case 'e':
-		case 'q':
-		case 'r':
-		case 't':
-		case 'v':
-		case 'y':
-			kmp->key = k;
-			break;
-		default:
-			kmp->key = '\0';
-			break;
-		}
-	} else if (kmp->depth == 2 && kmp->in_args) {
-		/* nodes, target, id */
-	}
+	kmp->levels[kmp->depth].key = key;
+	kmp->levels[kmp->depth].key_len = length;
 
 	return 0;
 }
@@ -310,6 +341,7 @@ static int krpc_msg_parse_dict_end(void *ctx)
 	struct krpc_msg_parse *kmp = ctx;
 	if (kmp_depth_dec(kmp, true))
 		return -1;
+	kmp_idx_inc(kmp);
 	return 0;
 }
 
@@ -323,9 +355,13 @@ struct tbl_callbacks krpc_msg_parse_callbacks {
 	.dict_end = krpc_msg_parse_dict_end,
 };
 
-static krpc_msg_parse(struct krpc_msg *msg, const void *data, size_t data_len)
+static int krpc_msg_parse(struct krpc_msg *msg, const void *data, size_t data_len)
 {
-	int r = tbl_parse(data, data_len, 
+	struct krpc_msg_parse kmp = {
+		.msg = msg,
+	};
+
+	return tbl_parse(data, data_len, &krpc_msg_parse_callbacks, &kmp);
 }
 
 static void encode_id(darray_char *d, bt_node_id *id)
