@@ -234,9 +234,14 @@ static int krpc_msg_parse_string_arg(struct krpc_msg_parse *kmp, char *value, si
 	} else if (memeqstr(value, len, "port")) {
 
 	}
+
+	return 0;
 }
 
-static int krpc_msg_parse_response(
+static int krpc_msg_parse_string_response(struct krpc_msg_parse *kmp, char *value, size_t len)
+{
+
+}
 
 static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
 {

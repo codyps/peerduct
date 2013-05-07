@@ -1,0 +1,12 @@
+# These 3 addresses are mentioned in the following bug:
+# https://trac.transmissionbt.com/ticket/2280
+#
+dh.transmissionbt.com 6881
+router.bittorrent.com 6881
+router.utorrent.com   6881
+
+#
+# https://trac.transmissionbt.com/ticket/4029
+#
+91.121.60.42
+2001:41d0:1:aa81:2::1
