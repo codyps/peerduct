@@ -16,9 +16,17 @@ Peerduct
  - gnutella
    - has a DHT as an extention
  - gnutella2
-
+ - https://gitweb.torproject.org/torspec.git/tree/tor-spec.txt
+ 
 
 - DHTs
  - pastry
  - chord
- - 
+ - OpenDHT (ring, https://blog.savoirfairelinux.com/en/2015/ring-opendht-a-distributed-hash-table/)
+ - ipfs
+ - sipping-p2p: (also lists some others) https://www.ietf.org/proceedings/65/slides/plenaryt-2.pdf
+ - DDNS, CoDoNS
+ - Beehive
+ 
+
+ 
