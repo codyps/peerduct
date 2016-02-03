@@ -28,5 +28,15 @@ Peerduct
  - DDNS, CoDoNS
  - Beehive
  
+- Auth
+ - 
 
- 
+- Onion routing
+ - Tor
+  - http://fermatslibrary.com/s/tor-the-second-generation-onion-router
+ - HORNET (high speed onion routing)
+  - http://arxiv.org/pdf/1507.05724v1.pdf
+
+- Auth/Enc/Sec
+ - https://core.telegram.org/mtproto
+ - 
