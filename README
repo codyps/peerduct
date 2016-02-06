@@ -34,9 +34,13 @@ Peerduct
 - Onion routing
  - Tor
   - http://fermatslibrary.com/s/tor-the-second-generation-onion-router
- - HORNET (high speed onion routing)
+  - https://svn.torproject.org/svn/projects/design-paper/tor-design.pdf
+ - HORNET (high speed onion routing) (requires Sphinx)
   - http://arxiv.org/pdf/1507.05724v1.pdf
+ - Sphinx
 
 - Auth/Enc/Sec
  - https://core.telegram.org/mtproto
- - 
+ - axolotl
+  - https://github.com/WhisperSystems/Signal-Android/wiki/ProtocolV2
+  - https://github.com/trevp/axolotl/wiki
