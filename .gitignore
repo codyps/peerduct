@@ -13,3 +13,5 @@
 .ninja*
 .config.h*
 build.ninja
+
+/test-benp

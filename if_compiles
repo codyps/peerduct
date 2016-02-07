@@ -1,4 +1,4 @@
-## if_compiles: d32577d, see https://github.com/jmesmon/cninja.git
+## if_compiles: d22f5ad, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
 set -euf -o pipefail
 

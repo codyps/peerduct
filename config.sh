@@ -1,4 +1,4 @@
-## config.sh: d32577d, see https://github.com/jmesmon/cninja.git
+## config.sh: d22f5ad, see https://github.com/jmesmon/cninja.git
 # ex: sts=8 sw=8 ts=8 noet
 set -eu -o pipefail
 
@@ -69,7 +69,7 @@ CONFIG_H_GEN=./config_h_gen
 CONFIGS=""
 
 # Check if compiler likes -MMD -MF
-if $CC $CFLAGS -MMD -MF /dev/null -x c /dev/null -o /dev/null >/dev/null 2>&1; then
+if $CC $CFLAGS -MMD -MF /dev/null -c -x c /dev/null -o /dev/null >/dev/null 2>&1; then
 	DEP_LINE="  depfile = \$out.d"
 	DEP_FLAGS="-MMD -MF \$out.d"
 else
