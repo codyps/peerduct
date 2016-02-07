@@ -1,0 +1,31 @@
+## if_compiles: d32577d, see https://github.com/jmesmon/cninja.git
+#! /bin/sh
+set -euf -o pipefail
+
+if [ $# -lt 4 ]; then
+	>&2 echo "Usage: $0 <input-file> <success-text> <failure-text> <cc> <cflags>..."
+	exit 1
+fi
+
+input=$1
+succ_text=$2
+fail_text=$3
+shift 3
+
+tmp=
+trap 'if [ -n "$tmp" ] && [ -e "$tmp" ]; then rm -rf "$tmp"; fi' EXIT TERM INT QUIT
+tmp=$(mktemp -d)
+
+if [ -n "${IF_COMPILES_DEBUG:-}" ]; then
+	if "$@" "$input" -o /dev/null; then
+		echo "$succ_text"
+	else
+		echo "$fail_text"
+	fi
+else
+	if "$@" "$input" -o /dev/null 2>/dev/null; then
+		echo "$succ_text"
+	else
+		echo "$fail_text"
+	fi
+fi

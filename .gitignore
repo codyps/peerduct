@@ -9,3 +9,7 @@
 .*.swp
 *.[oda]
 *.exe
+
+.ninja*
+.config.h*
+build.ninja
