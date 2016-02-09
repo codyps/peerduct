@@ -19,6 +19,7 @@
 #include <netdb.h>
 
 #include "ben.h"
+#include "benr.h"
 
 /* XXX: because bucket splitting is deterministic, there should be a way
  * to track it without start & end. */
@@ -60,31 +61,69 @@ enum krpc_type {
 	KT_ERROR
 };
 
-struct krpc_msg {
-	enum krpc_type  type;
-	enum krpc_query query;
+struct krpc_msg_error {
+	intmax_t code;
+	const char *str;
+	size_t len;
+};
 
-	long long error_code;
-	char *error;
-	size_t error_len;
+struct krpc_msg_query {
+	enum krpc_query query;
 
 	char *id;
 	size_t id_len;
 
-	char *trans_id; /* "t" */
+	union {
+		/* q.find_node */
+		struct {
+			const char *target;
+			size_t target_len;
+		} q_find_node;
+		/* r.find_node */
+		struct {
+			const char *nodes;
+			size_t nodes_len;
+		} r_find_node;
+		/* q.get_peers */
+		struct {
+			/* always 20bytes */
+			const char *info_hash;
+		} q_get_peers;
+		/* r.get_peers */
+		struct {
+			char *token;
+			size_t token_len;
+			/* and either 'values' or 'nodes' */
+		} r_get_peers;
+
+		/* q.announce_peer */
+		struct {
+			bool implied_port;
+			/* always 20bytes */
+			const char *info_hash;
+
+			char *token;
+			size_t token_len;
+
+			uint_least16_t port;
+		} q_announce_peer;
+	} args;
+};
+
+struct krpc_msg {
+	/* y */
+	enum krpc_type  type;
+
+	/* t */
+	char *trans_id;
 	size_t trans_id_len;
 
-	char *nodes;
-	size_t nodes_len;
-
-	char *target;
-	size_t target_len;
-
-	char *info_hash;
-	size_t info_hash_len;
-
-	char *token;
-	size_t token_len;
+	union {
+		/* e */
+		struct krpc_msg_error error;
+		/* q | r */
+		struct krpc_msg_query query;
+	};
 };
 
 /* 'a' 'e' 'q' 'r' 't' 'v' 'y'
@@ -103,300 +142,141 @@ struct krpc_msg {
  * v: 4 byte string where the first 2 bytes id the client and the second 2 the version.
  */
 
-enum ben_type {
-	BT_NONE,
-	BT_LIST,
-	BT_DICT
-};
-
-struct krpc_msg_parse_level {
-	enum ben_type type;
-	unsigned idx;
-
-	/* only used for dicts */
-	char *key;
-	size_t key_len;
-};
-
-struct krpc_msg_parse {
-	struct krpc_msg *msg;
-
-	struct krpc_msg_parse_level levels[32];
-	int depth;
-};
-
-static bool kmp_depth_is_dict(struct krpc_msg_parse *kmp)
+static int krpc_msg_parse_query(struct krpc_msg *msg, struct benr *q)
 {
-	return kmp->levels[kmp->depth] == BT_DICT;
-}
-
-static unsigned kmp_idx(struct krpc_msg_parse *kmp)
-{
-	return kmp->levels[kmp->depth].idx;
-}
-
-static int kmp_depth_inc(struct krpc_msg_parse *kmp, bool is_dict)
-{
-	kmp->depth++;
-	if (kmp->depth >= ARRAY_SIZE(kmp->levels))
-		return -1;
-	if (is_dict)
-		kmp->levels[kmp->depth]->type = BT_DICT;
-	else
-		kmp->levels[kmp->depth]->type = BT_LIST;
-	kmp->levels[kmp->depth]->idx = 0;
-	return 0;
-}
-
-static int kmp_depth_dec(struct krpc_msg_parse *kmp, bool is_dict)
-{
-	if (!kmp->depth)
-		return -1;
-	bool was_dict = kmp_depth_is_dict(kmp);
-	if (was_dict != is_dict)
-		return -1;
-
-	kmp->depth--;
-	return 0;
-}
-
-static void kmp_idx_inc(struct krpc_msg_parse *kmp)
-{
-	kmp->levels[kmp->depth]->idx ++;
-}
-
-static int krpc_msg_parse_type(struct krpc_msg_parse *kmp,
-		char *value, size_t len)
-{
-	if (len != 1)
-		return -1;
-	if (kmp->msg->type != KT_NONE)
-		return -1;
-
-	int v = *value;
-	switch (v) {
-	case 'e':
-		v = KT_ERROR;
-		break;
-	case 'q':
-		v = KT_QUERY;
-		break;
-	case 'r':
-		v = KT_RESPONSE;
-		break;
-	default:
+	struct benr_string s;
+	int r = benr_as_string(q, &s);
+	if (r < 0) {
+		printf("'q' is not a string\n");
 		return -1;
 	}
 
-	kmp->msg->type = v;
-	return 0;
-}
-
-static int krpc_msg_parse_query(struct krpc_msg_parse *kmp,
-		char *value, size_t len)
-{
-	if (kmp->msg->query != KQ_NONE)
-		return -1;
-
-	if (memeqstr(value, len, "ping")) {
-		kmp->msg->query = KQ_PING;
-	} else if (memeqstr(value, len, "find_node")) {
-		kmp->msg->query = KQ_FIND_NODE;
-	} else if (memeqstr(value, len, "get_peers")) {
-		kmp->msg->query = KQ_GET_PEERS;
+	if (memeqstr(s.start, s.len, "ping")) {
+		msg->query.query = KQ_PING;
+	} else if (memeqstr(s.start, s.len, "find_node")) {
+		msg->query.query = KQ_FIND_NODE;
+	} else if (memeqstr(s.start, s.len, "get_peers")) {
+		msg->query.query = KQ_GET_PEERS;
 	} else if (memeqstr(value, len, "announce_peer")) {
-		kmp->msg->query = KQ_ANNOUNCE_PEER;
-	} else
+		msg->query.query = KQ_ANNOUNCE_PEER;
+	} else {
+		printf("'q' has unrecognized value: '%.*s'\n", (int)s.len, s.start);
 		return -1;
-}
-
-static int krpc_msg_parse_trans_id(struct krpc_msg_parse *kmp, char *value, size_t len)
-{
-	if (kmp->msg->trans_id)
-		return -1;
-
-	kmp->msg->trans_id = value;
-	kmp->msg->trans_id_len = len;
-
-	return 0;
-}
-
-static int krpc_msg_parse_string_arg(struct krpc_msg_parse *kmp, char *value, size_t len)
-{
-	if (memeqstr(value, len, "id")) {
-
-	} else if (memeqstr(value, len, "info_hash")) {
-
-	} else if (memeqstr(value, len, "target")) {
-
-	} else if (memeqstr(value, len, "implied_port")) {
-
-	} else if (memeqstr(value, len, "port")) {
-
 	}
 
 	return 0;
 }
 
-static int krpc_msg_parse_string_response(struct krpc_msg_parse *kmp, char *value, size_t len)
+static enum krpc_type krpc_parse_y(struct benr *y)
 {
-
-}
-
-static int krpc_msg_parse_string(void *ctx, char *value, size_t length)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	struct krpc_msg_parse_level *l = &kmp->levels[kmp->depth];
-	int ret = 0;
-	if (kmp->depth == 0)
-		return -1;
-
-	if (kmp->depth == 1 && kmp_depth_is_dict(kmp)) {
-		if (l->key_len != 1)
-			goto out;
-
-		switch (*l->key) {
-		case 'q':
-			ret = krpc_msg_parse_query(kmp, value, length);
-			break;
-		case 't':
-			ret = krpc_msg_parse_trans_id(kmp, value, length);
-			break;
-		case 'y':
-			ret =  krpc_msg_parse_type(kmp, value, length);
-			break;
-		case 'a':
-		case 'e':
-		case 'r':
-			/* these are not supposed to be strings */
-			return -1;
-		/* case 'v': */
-		/* ignore */
-		}
-	} else if (kmp->depth == 2) {
-		if (!kmp_depth_is_dict(kmp)) {
-			/* error? */
-			if (l->key_len != 1 && *l->key != 'e')
-				goto out;
-
-			/* nothing but the 2nd elem can be a string */
-			if (kmp_idx(kmp) != 1)
-				return -1;
-
-			ret = krpc_msg_parse_error_str(kmp, value, length);
-		} else {
-			struct krpc_msg_parse_level *pl =
-				&kmp->levels[kmp->depth];
-			if (pl->key_len != 1)
-				goto out;
-			switch (*pl->key) {
-			case 'a':
-				/* args */
-				ret = krpc_msg_parse_args(kmp, value, length);
-				break;
-			case 'r':
-				/* response */
-				ret = krpc_msg_parse_response(kmp, value, length);
-			}
-		}
-	} else if (kmp->depth == 3) {
-		/* some types of args do this */
+	struct benr_string s;
+	r = benr_as_string(&v_y, &s);
+	if (r < 0) {
+		printf("'y' is not a string\n");
+		return KT_NONE;
 	}
 
-out:
-	kmp_idx_inc(kmp);
-	return ret;
+	if (s.len != 1) {
+		printf("'y' does not have length 1: %zu\n", s.len);
+		return KT_NONE;
+	}
+
+	switch (*s.start) {
+	case 'e':
+		return KT_ERROR;
+	case 'q':
+		return KT_QUERY;
+	case 'r':
+		return KT_RESPONSE;
+	default:
+		printf("'y' has an unrecognized value: '%c'\n", *s.start);
+		return KT_NONE;
+	}
 }
-
-static int krpc_msg_parse_integer(void *ctx, long long value)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	if (kmp->depth == 0)
-		return -1;
-
-	/* XXX: unlike parse_string(), I don't bother erroring when
-	 * and integer is used in an invalid field */
-
-	/* the only place I care about an integer is in the "error" context */
-	if (kmp->depth != 2
-			|| kmp_depth_is_dict(kmp)
-			|| kmp->levels[kmp->depth].idx != 0
-			|| kmp->levels[kmp->depth - 1].key_len != 1
-			|| kmp->levels[kmp->depth - 1].key != 'e')
-		goto out;
-
-	kmp->msg->error_code = value;
-
-out:
-	kmp_idx_inc(kmp);
-	return 0;
-}
-
-static int krpc_msg_parse_list_start(void *ctx, char *value, size_t length)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	if (kmp->depth == 0)
-		return -1;
-	if (kmp_depth_inc(kmp, false))
-		return -1;
-	return 0;
-}
-
-static int krpc_msg_parse_list_end(void *ctx)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	if (kmp->depth == 0)
-		return -1;
-	if (kmp_depth_dec(kmp, false))
-		return -1;
-	kmp_idx_inc(kmp);
-	return 0;
-}
-
-static int krpc_msg_parse_dict_start(void *ctx)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	if (kmp_depth_inc(kmp, true))
-		return -1;
-	return 0;
-}
-
-static int krpc_msg_parse_dict_key(void *ctx, char *key, size_t length)
-{
-	struct krpc_msg_parse *kmp = ctx;
-
-	kmp->levels[kmp->depth].key = key;
-	kmp->levels[kmp->depth].key_len = length;
-
-	return 0;
-}
-
-static int krpc_msg_parse_dict_end(void *ctx)
-{
-	struct krpc_msg_parse *kmp = ctx;
-	if (kmp_depth_dec(kmp, true))
-		return -1;
-	kmp_idx_inc(kmp);
-	return 0;
-}
-
-struct tbl_callbacks krpc_msg_parse_callbacks {
-	.integer = krpc_msg_parse_integer,
-	.string  = krpc_msg_parse_string,
-	.list_start = krpc_msg_parse_list_start,
-	.list_end = krpc_msg_parse_list_end,
-	.dict_start = krpc_msg_parse_dict_start,
-	.dict_key = krpc_msg_parse_dict_key,
-	.dict_end = krpc_msg_parse_dict_end,
-};
 
 static int krpc_msg_parse(struct krpc_msg *msg, const void *data, size_t data_len)
 {
-	struct krpc_msg_parse kmp = {
-		.msg = msg,
-	};
+	struct benr top;
+	benr_init(&top, data, data_len);
 
-	return tbl_parse(data, data_len, &krpc_msg_parse_callbacks, &kmp);
+	struct benr_dict top_d;
+	int r = benr_as_dict(&top, &top_d);
+	if (r < 0) {
+		printf("Top level was not a dict\n");
+		return r;
+	}
+
+	/* scan through the top level dict, look for the keys we care about */
+	struct benr_dict_iter top_di;
+	benr_dict_iter(&top_d, &top_di);
+
+	/* notable entries */
+	struct benr v_a = {0}, v_e = {0}, v_q = {0}, v_r = {0}, v_t = {0}, v_y = {0}, v_v = {0};
+
+	for (;;) {
+		struct benr k, v;
+		r = benr_dict_iter_next(&top_di, &k, &v);
+		if (r < 0) {
+			printf("Ran out of entries\n");
+			break;
+		}
+
+		struct benr_string ks;
+		r = benr_as_string(&k, &ks);
+		if (r < 0) {
+			printf("Non string dict key?\n");
+			continue;
+		}
+
+		if (ks.len == 1) {
+			switch (*ks.start) {
+			case 'a':
+				v_a = v;
+				break;
+			case 'e':
+				v_e = v;
+				break;
+			case 'q':
+				v_q = v;
+				break;
+			case 'r':
+				v_r = v;
+				break;
+			case 't':
+				v_t = v;
+				break;
+			case 'y':
+				v_y = v;
+				break;
+			case 'v':
+				v_v = v;
+				break;
+			default:
+				printf("unknown top level key: '%.*s'\n", (int)ks.len, ks.start);
+			}
+		} else {
+			printf("unknown top level key: '%.*s'\n", (int)ks.len, ks.start);
+		}
+	}
+
+	/* we should now have all the entries we care about, start parsing them */
+	msg->type = krpc_parse_y(&v_y);
+	if (msg->type == KT_NONE)
+		return -1;
+
+	if (msg->type == KT_ERROR) {
+		/* WHOO, an error. read it and print and we're done! */
+	}
+
+	if (msg->type == KT_QUERY || msg->type == KT_RESPONSE) {
+		r = krpc_msg_parse_query(msg, &v_q);
+		if (r < 0)
+			return r;
+	}
+
+	/* TODO: use the type to look for further elements */
+
+	return -1;
 }
 
 static void encode_id(darray_char *d, bt_node_id *id)
