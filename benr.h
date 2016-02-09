@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MUST_USE __attribute__((warn_unused_result))
+
 /*
  * Operate on bencoded data directly, without any decoding
  */
@@ -75,9 +77,16 @@ struct benr {
 
 void benr_init(struct benr *b, const void *data, size_t data_bytes);
 
+MUST_USE
 int benr_as_string(struct benr *b, struct benr_string *s);
+
+MUST_USE
 int benr_as_int(struct benr *b, intmax_t *s);
+
+MUST_USE
 int benr_as_dict(struct benr *b, struct benr_dict *s);
+
+MUST_USE
 int benr_as_list(struct benr *b, struct benr_list *s);
 
 
@@ -92,5 +101,8 @@ struct benr_list_iter {
 void benr_list_iter(struct benr_list *l, struct benr_list_iter *i);
 void benr_dict_iter(struct benr_dict *l, struct benr_dict_iter *i);
 
+MUST_USE
 int benr_list_iter_next(struct benr_list_iter *l, struct benr *b);
+
+MUST_USE
 int benr_dict_iter_next(struct benr_dict_iter *l, struct benr *key, struct benr *val);

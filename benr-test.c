@@ -128,5 +128,70 @@ int main(void)
 	r = benr_dict_iter_next(&di, &k, &v);
 	assert(r < 0);
 
+	/* nesting */
+	/*               [           ]
+	 *                [][	    ]
+	 *                   [ ][  ]
+	 */
+	benr_init(&b, S("lded1:ali3eee"));
+
+	r = benr_as_list(&b, &l);
+	assert(r >= 0);
+
+	benr_list_iter(&l, &li);
+
+	struct benr b1;
+	r = benr_list_iter_next(&li, &b1);
+	assert(r >= 0);
+
+	r = benr_as_dict(&b1, &d);
+	assert(r >= 0);
+
+	benr_dict_iter(&d, &di);
+	struct benr b2, v2;
+	r = benr_dict_iter_next(&di, &b2, &v2);
+	assert(r < 0);
+
+	r = benr_list_iter_next(&li, &b1);
+	assert(r >= 0);
+
+	r = benr_as_dict(&b1, &d);
+	assert(r >= 0);
+
+	benr_dict_iter(&d, &di);
+	r = benr_dict_iter_next(&di, &b2, &v2);
+	assert(r >= 0);
+
+	assert(benr_eq(&(struct benr){
+		.kind = BENR_STRING,
+		.data = { .s = {
+			.start = (void*)"a",
+			.len = 1,
+		}}
+	}, &b2));
+
+	struct benr_list l2;
+	r = benr_as_list(&v2, &l2);
+	assert(r >= 0);
+
+	struct benr_list_iter li2;
+	benr_list_iter(&l2, &li2);
+
+	struct benr b3;
+	r = benr_list_iter_next(&li2, &b3);
+	assert(r >= 0);
+
+	assert(b3.kind == BENR_INT);
+	assert(b3.data.i == 3);
+
+	r = benr_list_iter_next(&li2, &b3);
+	assert(r < 0);
+
+	r = benr_dict_iter_next(&di, &b2, &v2);
+	assert(r < 0);
+
+	r = benr_list_iter_next(&li, &b1);
+	assert(r < 0);
+
 	return 0;
 }
