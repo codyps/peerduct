@@ -14,9 +14,7 @@ config
 #bin pd main.c
 #bin nd_reader nd_reader.c nodes_dat.c peer.c
 #bin test_list test_list.c
-#bin bt bt_dht.c rbtree/rbtree.c tbl/tbl.c
 
+#bin bt bt_dht.c rbtree/rbtree.c benr.c
 bin test-benp benp.c test-benp.c
 bin test-benr benr.c benr-test.c
-
-#bin hello-world hello-world.c
