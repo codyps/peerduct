@@ -17,5 +17,6 @@ config
 #bin bt bt_dht.c rbtree/rbtree.c tbl/tbl.c
 
 bin test-benp benp.c test-benp.c
+bin test-benr benr.c benr-test.c
 
 #bin hello-world hello-world.c

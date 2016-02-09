@@ -1,6 +1,21 @@
 #include "benr.h"
 
+#include <assert.h>
 #include <ctype.h>
+#include <string.h>
+
+static
+void *mempbrk(const void *s, size_t s_len, const void *accept, size_t accept_len)
+{
+	while (s_len) {
+		if (memchr(accept, *(const char *)s, accept_len))
+			return (void *)s;
+		s++;
+		s_len --;
+	}
+
+	return NULL;
+}
 
 static
 char ctx_peek(struct benr_ctx *ctx)
@@ -66,9 +81,9 @@ benr_init_uint(struct benr *b, struct benr_ctx *ctx, char end)
 	};
 }
 
-void benr_init(struct benr *b, void *data, size_t data_bytes)
+static void benr_next(struct benr *b, struct benr_ctx *ctx)
 {
-	struct benr_ctx lctx = { .start = data, .len = data_bytes };
+	struct benr_ctx lctx = *ctx;
 	if (!lctx.len) {
 		*b = (struct benr){.kind = BENR_NONE};
 		return;
@@ -97,36 +112,47 @@ void benr_init(struct benr *b, void *data, size_t data_bytes)
 
 		b->data.i = b->data.u * sign;
 		b->kind = BENR_INT;
+		*ctx = lctx;
 		return;
 	}
 	case 'd':
+		ctx_adv(&lctx);
 		*b = (struct benr){
 			.kind = BENR_DICT,
 			.data = { .d = { .ctx = {
-				.start = data + 1,
-				.len = data_bytes - 1,
+				.start = lctx.start,
+				.len = lctx.len,
 			}}}
 		};
+		*ctx = lctx;
 		return;
 	case 'l':
+		ctx_adv(&lctx);
 		*b = (struct benr){
 			.kind = BENR_LIST,
 			.data = { .l = { .ctx = {
-				.start = data + 1,
-				.len = data_bytes - 1,
+				.start = lctx.start,
+				.len = lctx.len,
 			}}}
 		};
+		*ctx = lctx;
+		return;
+	case 'e':
+		ctx_adv(&lctx);
+		*b = (struct benr){
+			.kind = BENR_X_END
+		};
+		*ctx = lctx;
 		return;
 	default:
 		if (!isdigit(c)) {
 			*b = (struct benr){
 				.kind = BENR_ERR_UNEXPECTED_BYTE,
-				.data = { .error_loc = data }
+				.data = { .error_loc = lctx.start }
 			};
 			return;
 		}
 
-		/* TODO: parse string */
 		struct benr b_len;
 		benr_init_uint(&b_len, &lctx, ':');
 
@@ -139,7 +165,7 @@ void benr_init(struct benr *b, void *data, size_t data_bytes)
 			*b = (struct benr){
 				.kind = BENR_ERR_STRING_TOO_LONG,
 				.data = { .error_len = b_len.data.u }
-			}
+			};
 			return;
 		}
 
@@ -148,11 +174,167 @@ void benr_init(struct benr *b, void *data, size_t data_bytes)
 			.len = b_len.data.u,
 		};
 		ctx_adv_n(&lctx, s.len);
-		/* *ctx = lctx; */
 		*b = (struct benr) {
 			.kind = BENR_STRING,
 			.data = { .s = s }
 		};
+		*ctx = lctx;
 		return;
 	}
+}
+
+void benr_init(struct benr *b, const void *data, size_t data_bytes)
+{
+	struct benr_ctx lctx = { .start = data, .len = data_bytes };
+	benr_next(b, &lctx);
+
+	/*
+	 * Because we share benr_next() with internal functions, it
+	 * might emit a BENR_X_END, which is not a real type we should
+	 * return, so replace it with an unexpected byte.
+	 */
+	if (b->kind == BENR_X_END) {
+		*b = (struct benr){
+			.kind = BENR_ERR_UNEXPECTED_BYTE,
+			.data = { .error_loc = data }
+		};
+	}
+}
+
+void benr_dict_iter(struct benr_dict *l, struct benr_dict_iter *i)
+{
+	*i = (struct benr_dict_iter){
+		.ctx = l->ctx
+	};
+}
+
+void benr_list_iter(struct benr_list *l, struct benr_list_iter *i)
+{
+	*i = (struct benr_list_iter){
+		.ctx = l->ctx
+	};
+}
+
+/*
+ * Anything that does not fully advance the context when parsed in
+ * benr_next()
+ */
+static bool
+benr_kind_is_container(enum benr_kind kind)
+{
+	return kind == BENR_DICT || kind == BENR_LIST;
+}
+
+static void
+ctx_adv_container(struct benr_ctx *ctx)
+{
+	uintmax_t depth = 1;
+	/* scan forward, looking for container start & end markers until we have 1 extra end marker */
+	while (depth) {
+		char *c = mempbrk(ctx->start, ctx->len, "lde", 3);
+		if (!c) {
+			/* EOF??? */
+			return;
+		}
+
+		switch (*c) {
+		case 'l':
+		case 'd':
+			depth ++;
+			break;
+		case 'e':
+			depth --;
+			break;
+		default:
+			assert(false);
+		}
+
+		ctx->len -= (c - (char *)ctx->start + 1);
+		ctx->start = c + 1;
+	}
+}
+
+/* FIXME: after returning -1 once, will not return -1 again (both benr's will
+ * be BENR_NONE instead) */
+int benr_list_iter_next(struct benr_list_iter *l, struct benr *b)
+{
+	struct benr x;
+	benr_next(&x, &l->ctx);
+	if (x.kind == BENR_X_END) {
+		l->ctx.len = 0;
+		return -1;
+	}
+	/* FIXME: see benr_dict_iter_next() fixme */
+	if (benr_kind_is_container(x.kind)) {
+		ctx_adv_container(&l->ctx);
+	}
+
+	*b = x;
+	return 0;
+}
+
+/* FIXME: does not check the key type */
+/* FIXME: after returning -1 once, will not return -1 again (both benr's will
+ * be BENR_NONE instead) */
+int benr_dict_iter_next(struct benr_dict_iter *l, struct benr *key, struct benr *val)
+{
+	struct benr k, v;
+	benr_next(&k, &l->ctx);
+	if (k.kind == BENR_X_END) {
+		l->ctx.len = 0;
+		return -1;
+	}
+	benr_next(&v, &l->ctx);
+	if (v.kind == BENR_X_END) {
+		l->ctx.len = 0;
+		return -1;
+	}
+
+	/*
+	 * FIXME: scanning like this causes us to potentially examine the
+	 * same data byte many times over (with deeply nested containers).
+	 * Instead of imeidately advancing, we could defer this scan and use
+	 * the parsing done on inner data to shrink the amount of double
+	 * scan.
+	 */
+	if (benr_kind_is_container(v.kind)) {
+		ctx_adv_container(&l->ctx);
+	}
+
+	*key = k;
+	*val = v;
+	return 0;
+}
+
+int benr_as_string(struct benr *b, struct benr_string *s)
+{
+	if (b->kind != BENR_STRING)
+		return -1;
+
+	*s = b->data.s;
+	return 0;
+}
+
+int benr_as_int(struct benr *b, intmax_t *s)
+{
+	if (b->kind != BENR_INT)
+		return -1;
+	*s = b->data.i;
+	return 0;
+}
+
+int benr_as_dict(struct benr *b, struct benr_dict *s)
+{
+	if (b->kind != BENR_DICT)
+		return -1;
+	*s = b->data.d;
+	return 0;
+}
+
+int benr_as_list(struct benr *b, struct benr_list *s)
+{
+	if (b->kind != BENR_LIST)
+		return -1;
+	*s = b->data.l;
+	return 0;
 }
