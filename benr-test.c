@@ -1,9 +1,32 @@
 #include "benr.h"
 #include <assert.h>
+#include <string.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define S(x) x, (ARRAY_SIZE(x) - 1)
 
+/*
+ * this is formulated as a debugging aid for confirming the library works properly.
+ * In real life, bencode equality can compare the encoded data directly for more efficiency
+ */
+static bool
+benr_eq(struct benr *a, struct benr *b)
+{
+	if (a->kind != b->kind)
+		return false;
+
+	switch (a->kind) {
+	case BENR_INT:
+		return a->data.i == b->data.i;
+	case BENR_STRING:
+		if (a->data.s.len != b->data.s.len)
+			return false;
+		return !memcmp(a->data.s.start, b->data.s.start, a->data.s.len);
+	default:
+		/* XXX: eventually fill in the others */
+		return false;
+	}
+}
 
 int main(void)
 {
@@ -52,7 +75,58 @@ int main(void)
 	r = benr_list_iter_next(&li, &bl);
 	assert(r <  0);
 
+	/* string */
+	benr_init(&b, S("5:hello"));
+	assert(b.kind == BENR_STRING);
+
+	struct benr_string s;
+	r = benr_as_string(&b, &s);
+	assert(r >= 0);
+
+	assert(s.len == 5);
+	assert(!memcmp("hello", s.start, s.len));
+
 	/* dict */
+	benr_init(&b, S("d3:onei1e5:seveni7ee"));
+
+	struct benr_dict d;
+	r = benr_as_dict(&b, &d);
+	assert(r >= 0);
+
+	struct benr_dict_iter di;
+	benr_dict_iter(&d, &di);
+
+	struct benr k, v;
+	r = benr_dict_iter_next(&di, &k, &v);
+	assert(r >= 0);
+
+	assert(benr_eq(&(struct benr){
+		.kind = BENR_STRING,
+		.data = { .s = {
+			.start = (void *)"one",
+			.len = 3,
+		}}
+	}, &k));
+
+	assert(v.kind == BENR_INT);
+	assert(v.data.i == 1);
+
+	r = benr_dict_iter_next(&di, &k, &v);
+	assert(r >= 0);
+
+	assert(benr_eq(&(struct benr){
+		.kind = BENR_STRING,
+		.data = { .s = {
+			.start = (void *)"seven",
+			.len = 5,
+		}}
+	}, &k));
+
+	assert(v.kind == BENR_INT);
+	assert(v.data.i == 7);
+
+	r = benr_dict_iter_next(&di, &k, &v);
+	assert(r < 0);
 
 	return 0;
 }
