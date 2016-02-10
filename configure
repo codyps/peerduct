@@ -17,4 +17,5 @@ config
 
 #bin bt bt_dht.c rbtree/rbtree.c benr.c
 bin test-benp benp.c test-benp.c
-bin test-benr benr.c benr-test.c
+bin test-benr-api benr.c benr-api-test.c
+bin test-benr-internal benr-internal-test.c

@@ -4,18 +4,8 @@
 #include <ctype.h>
 #include <string.h>
 
-static
-void *mempbrk(const void *s, size_t s_len, const void *accept, size_t accept_len)
-{
-	while (s_len) {
-		if (memchr(accept, *(const char *)s, accept_len))
-			return (void *)s;
-		s++;
-		s_len --;
-	}
-
-	return NULL;
-}
+#include <stdio.h>
+#define debug(...) fprintf(stderr, __VA_ARGS__)
 
 static
 char ctx_peek(struct benr_ctx *ctx)
@@ -81,7 +71,8 @@ benr_init_uint(struct benr *b, struct benr_ctx *ctx, char end)
 	};
 }
 
-static void benr_next(struct benr *b, struct benr_ctx *ctx)
+static void
+benr_next(struct benr *b, struct benr_ctx *ctx)
 {
 	struct benr_ctx lctx = *ctx;
 	if (!lctx.len) {
@@ -201,14 +192,14 @@ void benr_init(struct benr *b, const void *data, size_t data_bytes)
 	}
 }
 
-void benr_dict_iter(struct benr_dict *l, struct benr_dict_iter *i)
+void benr_dict_iter(const struct benr_dict *l, struct benr_dict_iter *i)
 {
 	*i = (struct benr_dict_iter){
 		.ctx = l->ctx
 	};
 }
 
-void benr_list_iter(struct benr_list *l, struct benr_list_iter *i)
+void benr_list_iter(const struct benr_list *l, struct benr_list_iter *i)
 {
 	*i = (struct benr_list_iter){
 		.ctx = l->ctx
@@ -225,33 +216,37 @@ benr_kind_is_container(enum benr_kind kind)
 	return kind == BENR_DICT || kind == BENR_LIST;
 }
 
-static void
+static bool
+benr_kind_is_error(enum benr_kind kind)
+{
+	return kind >= BENR_ERR_FIRST;
+}
+
+MUST_USE
+static int
 ctx_adv_container(struct benr_ctx *ctx)
 {
+	struct benr_ctx lctx = *ctx;
 	uintmax_t depth = 1;
 	/* scan forward, looking for container start & end markers until we have 1 extra end marker */
+	struct benr b;
 	while (depth) {
-		char *c = mempbrk(ctx->start, ctx->len, "lde", 3);
-		if (!c) {
-			/* EOF??? */
-			return;
-		}
-
-		switch (*c) {
-		case 'l':
-		case 'd':
+		benr_next(&b, ctx);
+		if (benr_kind_is_container(b.kind)) {
 			depth ++;
-			break;
-		case 'e':
+		} else if (b.kind == BENR_X_END) {
 			depth --;
-			break;
-		default:
-			assert(false);
+		} else if (benr_kind_is_error(b.kind)) {
+			/* FIXME: better error reporting */
+			return -b.kind;
+		} else if (b.kind == BENR_NONE) {
+			/* FIXME: better error reporting: in this case, we ended too soon */
+			return -BENR_ERR_UNEXPECTED_EOF;
 		}
-
-		ctx->len -= (c - (char *)ctx->start + 1);
-		ctx->start = c + 1;
 	}
+	*ctx = lctx;
+	/* FIXME: better error reporting */
+	return 0;
 }
 
 /* FIXME: after returning -1 once, will not return -1 again (both benr's will
@@ -266,7 +261,9 @@ int benr_list_iter_next(struct benr_list_iter *l, struct benr *b)
 	}
 	/* FIXME: see benr_dict_iter_next() fixme */
 	if (benr_kind_is_container(x.kind)) {
-		ctx_adv_container(&l->ctx);
+		int r = ctx_adv_container(&l->ctx);
+		if (r < 0)
+			return r;
 	}
 
 	*b = x;
@@ -298,7 +295,9 @@ int benr_dict_iter_next(struct benr_dict_iter *l, struct benr *key, struct benr 
 	 * scan.
 	 */
 	if (benr_kind_is_container(v.kind)) {
-		ctx_adv_container(&l->ctx);
+		int r = ctx_adv_container(&l->ctx);
+		if (r < 0)
+			return r;
 	}
 
 	*key = k;
@@ -306,7 +305,7 @@ int benr_dict_iter_next(struct benr_dict_iter *l, struct benr *key, struct benr 
 	return 0;
 }
 
-int benr_as_string(struct benr *b, struct benr_string *s)
+int benr_as_string(const struct benr *b, struct benr_string *s)
 {
 	if (b->kind != BENR_STRING)
 		return -1;
@@ -315,7 +314,7 @@ int benr_as_string(struct benr *b, struct benr_string *s)
 	return 0;
 }
 
-int benr_as_int(struct benr *b, intmax_t *s)
+int benr_as_int(const struct benr *b, intmax_t *s)
 {
 	if (b->kind != BENR_INT)
 		return -1;
@@ -323,7 +322,7 @@ int benr_as_int(struct benr *b, intmax_t *s)
 	return 0;
 }
 
-int benr_as_dict(struct benr *b, struct benr_dict *s)
+int benr_as_dict(const struct benr *b, struct benr_dict *s)
 {
 	if (b->kind != BENR_DICT)
 		return -1;
@@ -331,7 +330,7 @@ int benr_as_dict(struct benr *b, struct benr_dict *s)
 	return 0;
 }
 
-int benr_as_list(struct benr *b, struct benr_list *s)
+int benr_as_list(const struct benr *b, struct benr_list *s)
 {
 	if (b->kind != BENR_LIST)
 		return -1;

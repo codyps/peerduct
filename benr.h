@@ -10,6 +10,10 @@
  */
 
 enum benr_kind {
+	/* TODO: consider moving these to return values? */
+	BENR_NONE,
+
+	/* real types */
 	BENR_STRING,
 	BENR_INT,
 	BENR_DICT,
@@ -25,16 +29,14 @@ enum benr_kind {
 	 * some other error mechanism seperate from values. This mixture,
 	 * while condensing the code, makes the API of
 	 * benr_dict_iter_next() weird. */
-	/* TODO: consider moving these to return values? */
-	BENR_NONE,
 
-	BENR_ERR_UNEXPECTED_BYTE,
+	BENR_ERR_FIRST,
+	BENR_ERR_UNEXPECTED_BYTE = BENR_ERR_FIRST,
 	BENR_ERR_UNEXPECTED_EOF,
 	BENR_ERR_UNEXPECTED_BYTE_IN_INT,
 	BENR_ERR_UNEXPECTED_EOF_IN_INT,
 	BENR_ERR_STRING_TOO_LONG,
 	BENR_ERR_KEY_IS_NOT_STRING,
-
 };
 
 struct benr_string {
@@ -78,16 +80,16 @@ struct benr {
 void benr_init(struct benr *b, const void *data, size_t data_bytes);
 
 MUST_USE
-int benr_as_string(struct benr *b, struct benr_string *s);
+int benr_as_string(const struct benr *b, struct benr_string *s);
 
 MUST_USE
-int benr_as_int(struct benr *b, intmax_t *s);
+int benr_as_int(const struct benr *b, intmax_t *s);
 
 MUST_USE
-int benr_as_dict(struct benr *b, struct benr_dict *s);
+int benr_as_dict(const struct benr *b, struct benr_dict *s);
 
 MUST_USE
-int benr_as_list(struct benr *b, struct benr_list *s);
+int benr_as_list(const struct benr *b, struct benr_list *s);
 
 
 struct benr_dict_iter {
@@ -98,8 +100,8 @@ struct benr_list_iter {
 	struct benr_ctx ctx;
 };
 
-void benr_list_iter(struct benr_list *l, struct benr_list_iter *i);
-void benr_dict_iter(struct benr_dict *l, struct benr_dict_iter *i);
+void benr_list_iter(const struct benr_list *l, struct benr_list_iter *i);
+void benr_dict_iter(const struct benr_dict *l, struct benr_dict_iter *i);
 
 MUST_USE
 int benr_list_iter_next(struct benr_list_iter *l, struct benr *b);
