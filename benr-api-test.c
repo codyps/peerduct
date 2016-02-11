@@ -2,8 +2,6 @@
 #include <assert.h>
 #include <string.h>
 
-#include <stdio.h>
-
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define S(x) x, (ARRAY_SIZE(x) - 1)
 
@@ -32,7 +30,6 @@ benr_eq(struct benr *a, struct benr *b)
 
 int main(void)
 {
-
 	/* integer */
 	{
 		struct benr b;
@@ -212,7 +209,6 @@ int main(void)
 		 *     ^
 		 */
 		r = benr_list_iter_next(&li, &b1);
-		printf("ret: %d\n", r);
 		assert(r >= 0);
 
 		r = benr_as_dict(&b1, &d);

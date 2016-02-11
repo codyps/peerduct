@@ -4,9 +4,6 @@
 #include <ctype.h>
 #include <string.h>
 
-#include <stdio.h>
-#define debug(...) fprintf(stderr, __VA_ARGS__)
-
 static
 char ctx_peek(struct benr_ctx *ctx)
 {
@@ -231,7 +228,7 @@ ctx_adv_container(struct benr_ctx *ctx)
 	/* scan forward, looking for container start & end markers until we have 1 extra end marker */
 	struct benr b;
 	while (depth) {
-		benr_next(&b, ctx);
+		benr_next(&b, &lctx);
 		if (benr_kind_is_container(b.kind)) {
 			depth ++;
 		} else if (b.kind == BENR_X_END) {

@@ -1,6 +1,7 @@
 #include "benr.h"
 #include "benr.c"
 
+#include <stdio.h>
 #define debug(...) fprintf(stderr, __VA_ARGS__)
 
 static
