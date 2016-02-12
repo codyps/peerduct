@@ -1,4 +1,4 @@
-## config.sh: d22f5ad, see https://github.com/jmesmon/cninja.git
+## config.sh: 3ac13f8, see https://github.com/jmesmon/cninja.git
 # ex: sts=8 sw=8 ts=8 noet
 set -eu -o pipefail
 
@@ -23,7 +23,7 @@ fi
 LIB_CFLAGS="${LIB_CFLAGS:-} ${PKGCONFIG_CFLAGS} "
 LIB_LDFLAGS="${LIB_LDFLAGS:-} ${PKGCONFIG_LDFLAGS}"
 
-ALL_CFLAGS="${WARN_FLAGS} -std=c11 -D_GNU_SOURCE"
+ALL_CFLAGS="${WARN_FLAGS}"
 
 if_runs () {
 	local y=$1
@@ -88,7 +88,7 @@ ldflags = $LDFLAGS
 
 rule cc
   command = \$cc \$cflags $DEP_FLAGS  -c \$in -o \$out
-  $DEP_LINE
+$DEP_LINE
 
 rule ccld
   command = \$cc \$ldflags -o \$out \$in

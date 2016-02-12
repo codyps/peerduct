@@ -4,8 +4,10 @@
 set -eu -o pipefail
 
 #PKGCONFIG_LIBS=""
-LIB_CFLAGS="-Iccan"
-#LIB_LDFLAGS=""
+LIB_CFLAGS="-Iccan -std=gnu11 -D_GNU_SOURCE"
+
+# Only for bt, we need per-target flags!
+LIB_LDFLAGS="-lev"
 
 . "$(dirname $0)"/config.sh
 
@@ -15,7 +17,8 @@ config
 #bin nd_reader nd_reader.c nodes_dat.c peer.c
 #bin test_list test_list.c
 
-#bin bt bt_dht.c rbtree/rbtree.c benr.c
+bin bt bt_dht.c rbtree/rbtree.c benr.c ccan/ccan/net/net.c
+
 bin test-benp benp.c test-benp.c
 bin test-benr-api benr.c benr-api-test.c
 bin test-benr-internal benr-internal-test.c

@@ -70,6 +70,7 @@ struct krpc_msg_error {
 struct krpc_msg_query {
 	enum krpc_query query;
 
+	/* always 20 bytes */
 	char *id;
 	size_t id_len;
 
@@ -157,7 +158,7 @@ static int krpc_msg_parse_query(struct krpc_msg *msg, struct benr *q)
 		msg->query.query = KQ_FIND_NODE;
 	} else if (memeqstr(s.start, s.len, "get_peers")) {
 		msg->query.query = KQ_GET_PEERS;
-	} else if (memeqstr(value, len, "announce_peer")) {
+	} else if (memeqstr(s.start, s.len, "announce_peer")) {
 		msg->query.query = KQ_ANNOUNCE_PEER;
 	} else {
 		printf("'q' has unrecognized value: '%.*s'\n", (int)s.len, s.start);
@@ -170,7 +171,7 @@ static int krpc_msg_parse_query(struct krpc_msg *msg, struct benr *q)
 static enum krpc_type krpc_parse_y(struct benr *y)
 {
 	struct benr_string s;
-	r = benr_as_string(&v_y, &s);
+	int r = benr_as_string(y, &s);
 	if (r < 0) {
 		printf("'y' is not a string\n");
 		return KT_NONE;
@@ -211,7 +212,8 @@ static int krpc_msg_parse(struct krpc_msg *msg, const void *data, size_t data_le
 	benr_dict_iter(&top_d, &top_di);
 
 	/* notable entries */
-	struct benr v_a = {0}, v_e = {0}, v_q = {0}, v_r = {0}, v_t = {0}, v_y = {0}, v_v = {0};
+	struct benr v_a, v_e, v_q, v_r, v_t, v_y, v_v;
+	v_a = v_e = v_q = v_r = v_t = v_y = v_v = BENR_INIT_NONE;
 
 	for (;;) {
 		struct benr k, v;
@@ -393,6 +395,8 @@ static void send_ping_to_peer(struct peer *p)
 
 static void on_peer_timeout(EV_P_ ev_timer *w, int revents)
 {
+	(void)revents;
+
 	struct peer *p = container_of(w, typeof(*p), stale_timer);
 	ev_tstamp after = p->last_activity - ev_now(EV_A) + PEER_TIMEOUT;
 	if (after < 0.) {
@@ -408,6 +412,8 @@ static void on_peer_timeout(EV_P_ ev_timer *w, int revents)
 
 static void sock_cb(EV_P_ ev_io *w, int revents)
 {
+	(void)revents;
+
 	char buf[2048];
 	struct sock *s = container_of(w, typeof(*s), w);
 	struct sockaddr_storage addr;
@@ -482,7 +488,14 @@ static struct peer *add_peer(EV_P_ struct sock *s, char *name, char *service)
 int main(int argc, char **argv)
 {
 	if (argc != 3) {
-		fprintf(stderr, "usage: %s <peer addr> <peer port>\n", argv[0]);
+		fprintf(stderr,
+"Usage: %s <peer addr> <peer port>\n"
+"\n"
+"Try:\n"
+"	%s router.bittorrent.com 6881\n"
+"	%s router.utorrent.com 6881\n"
+"	%s dht.transmissionbt.com 6881\n"
+,argv[0], argv[0], argv[0], argv[0]);
 		return 1;
 	}
 

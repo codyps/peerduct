@@ -54,6 +54,7 @@
 #define HAVE_ISBLANK 1
 #define HAVE_MEMMEM 1
 #define HAVE_MEMRCHR 1
+#define HAVE_STATEMENT_EXPR 1
 #define HAVE_TYPEOF 1
 #define HAVE_WARN_UNUSED_RESULT 1
 /* NOTE: note-NON_ATTRIBUTE.c "compiler errors when unrecognized attributes are used, no effect on config.h accuracy" */

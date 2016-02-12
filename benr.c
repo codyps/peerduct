@@ -213,12 +213,6 @@ benr_kind_is_container(enum benr_kind kind)
 	return kind == BENR_DICT || kind == BENR_LIST;
 }
 
-static bool
-benr_kind_is_error(enum benr_kind kind)
-{
-	return kind >= BENR_ERR_FIRST;
-}
-
 MUST_USE
 static int
 ctx_adv_container(struct benr_ctx *ctx)
@@ -233,7 +227,7 @@ ctx_adv_container(struct benr_ctx *ctx)
 			depth ++;
 		} else if (b.kind == BENR_X_END) {
 			depth --;
-		} else if (benr_kind_is_error(b.kind)) {
+		} else if (benr_is_error(&b)) {
 			/* FIXME: better error reporting */
 			return -b.kind;
 		} else if (b.kind == BENR_NONE) {

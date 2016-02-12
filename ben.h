@@ -2,6 +2,8 @@
 #define BEN_H_
 
 #include <ccan/darray/darray.h>
+#include <assert.h>
+#include <limits.h>
 
 /* TODO: provide checking for
  *  - improper dict ordering
@@ -31,7 +33,8 @@ static inline void ben_list_end(darray_char *d)
 
 static inline void ben_string(darray_char *d, const char *bytes, size_t len)
 {
-	darray_printf(*d, "%zu:%.*s", len, len, bytes);
+	assert(len <= INT_MAX);
+	darray_printf(*d, "%zu:%.*s", len, (int)len, bytes);
 }
 
 static inline void ben_integer(darray_char *d, long long value)

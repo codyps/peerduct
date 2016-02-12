@@ -16,3 +16,6 @@ build.ninja
 
 /test-benp
 /test-benr
+/bt
+
+/test-*

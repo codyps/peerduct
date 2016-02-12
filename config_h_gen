@@ -1,4 +1,4 @@
-## config_h_gen: d22f5ad, see https://github.com/jmesmon/cninja.git
+## config_h_gen: 3ac13f8, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
 set -euf -o pipefail
 
