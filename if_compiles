@@ -1,4 +1,4 @@
-## if_compiles: 0a33d06+, see https://github.com/jmesmon/cninja.git
+## if_compiles: 0e775f1, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
 set -euf
 

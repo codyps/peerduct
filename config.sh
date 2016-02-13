@@ -1,4 +1,4 @@
-## config.sh: 0a33d06+, see https://github.com/jmesmon/cninja.git
+## config.sh: 0e775f1, see https://github.com/jmesmon/cninja.git
 # ex: sts=8 sw=8 ts=8 noet
 set -eu
 
@@ -23,11 +23,11 @@ fi
 LIB_CFLAGS="${LIB_CFLAGS:-} ${PKGCONFIG_CFLAGS} "
 LIB_LDFLAGS="${LIB_LDFLAGS:-} ${PKGCONFIG_LDFLAGS}"
 
-ALL_CFLAGS="${WARN_FLAGS} -std=c11 -D_GNU_SOURCE"
+ALL_CFLAGS="${WARN_FLAGS}"
 
 if_runs () {
-	local y=$1
-	local n=$2
+	local y="$1"
+	local n="$2"
 	shift 2
 	"$@" >/dev/null 2>&1 && printf "%s" "$y" || printf "%s" "$n"
 }
@@ -158,7 +158,7 @@ bin () {
 	fi
 	out="$1"
 	shift
-	out_var="${out/./_}"
+	out_var=$(printf '%s' "$out" | sed 's/./_/')
 
 	for s in "$@"; do
 		echo "build $(to_obj "$s"): cc $s | $(e_if $CONFIG_H config.h)"
@@ -174,7 +174,7 @@ BINS=""
 
 end_of_ninja () {
 	echo build build.ninja : ninja_gen $CONFIGURE_DEPS
-	echo default ${BINS}
+	echo default $BINS
 }
 
 trap end_of_ninja EXIT
