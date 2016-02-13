@@ -1,6 +1,5 @@
-## config.sh: 9a49ff0, see https://github.com/jmesmon/cninja.git
+## config.sh: 0a33d06+, see https://github.com/jmesmon/cninja.git
 # ex: sts=8 sw=8 ts=8 noet
-set -o pipefail >/dev/null || true
 set -eu
 
 : ${CROSS_COMPILER:=}

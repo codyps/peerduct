@@ -1,6 +1,5 @@
-## if_compiles: 9a49ff0, see https://github.com/jmesmon/cninja.git
+## if_compiles: 0a33d06+, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
-set -o pipefail >/dev/null || true
 set -euf
 
 if [ $# -lt 4 ]; then

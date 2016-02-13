@@ -1,7 +1,6 @@
-## configure: d32577d, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
 # ex: sts=8 sw=8 ts=8 noet
-set -eu -o pipefail
+set -eu
 
 #PKGCONFIG_LIBS=""
 LIB_CFLAGS="-Iccan -std=gnu11 -D_GNU_SOURCE"
