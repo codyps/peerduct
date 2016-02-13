@@ -1,4 +1,4 @@
-## build: 3ac13f8, see https://github.com/jmesmon/cninja.git
+## build: 9a49ff0, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
 cd $(dirname $0)
 ./configure

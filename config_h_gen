@@ -1,6 +1,10 @@
-## config_h_gen: 3ac13f8, see https://github.com/jmesmon/cninja.git
+## config_h_gen: 9a49ff0, see https://github.com/jmesmon/cninja.git
 #! /bin/sh
-set -euf -o pipefail
+
+# We'd like pipes to fail properly, but we don't quite depend on it anywhere.
+# Try to enable, but also try not to die if it doesn't work.
+set -o pipefail >/dev/null || true
+set -euf
 
 if [ $# -lt 2 ]; then
 	echo "Usage: $0 <input-file> <cc> <cflags>..."
