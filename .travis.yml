@@ -2,4 +2,5 @@ language: c
 compiler:
         - clang
         - gcc
-script: "make"
+install: sudo apt-get install ninja-build
+script: ./build
