@@ -44,17 +44,41 @@ cflag_x () {
 	done
 }
 
+try_run() {
+	"$@" >/dev/null 2>&1
+}
+
+cflag_first () {
+	local cc=$(eval printf "%s" "\${$1CC}")
+	local cflags=$(eval printf "%s" "\${$1CFLAGS:-}")
+	shift
+	for i in "$@"; do
+		if try_run $cc $cflags -c -x c "$i" /dev/null -o /dev/null; then
+			echo "$i"
+			return
+		fi
+	done
+}
+
 die () {
 	>&2 echo "Error: $*"
 	exit 1
 }
 
 : ${EXTRA_FLAGS=}
-: ${SANITIZE_FLAGS="-fsanitize=address"}
-: ${DEBUG_FLAGS="-ggdb3"}
-: ${LTO_FLAGS="-flto"}
-COMMON_FLAGS="$(cflag_x "" ${SANITIZE_FLAGS} ${LTO_FLAGS} -fsanitize=undefined -fvar-tracking-assignments)"
-: ${CFLAGS="${ALL_CFLAGS} ${COMMON_FLAGS} -Os ${DEBUG_FLAGS} ${EXTRA_FLAGS}"}
+
+: ${SANITIZE_FLAGS="$(cflag_x "" -fsanitize=address -fsanitize=undefined)"}
+: ${DEBUG_FLAGS="$(cflag_x "" -ggdb3 -fvar-tracking-assignments)"}
+: ${LTO_FLAGS="$(cflag_x "" -flto)"}
+: ${OPT_FLAGS="$(cflag_first "" -Og -Os -O2)"}
+
+COMMON_FLAGS="${SANITIZE_FLAGS} ${DEBUG_FLAGS} ${LTO_FLAGS}"
+
+: ${CFLAGS="${ALL_CFLAGS} ${COMMON_FLAGS} ${OPT_FLAGS} ${EXTRA_FLAGS}"}
+
+if [ -n "${LTO_FLAGS}" ]; then
+	COMMON_FLAGS="${COMMON_FLAGS} ${OPT_FLAGS}"
+fi
 
 # Without LIB_CFLAGS
 : ${HOST_CFLAGS:=${CFLAGS:-}}

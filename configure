@@ -2,11 +2,11 @@
 # ex: sts=8 sw=8 ts=8 noet
 set -eu
 
-#PKGCONFIG_LIBS=""
-LIB_CFLAGS="-Iccan -std=gnu11 -D_GNU_SOURCE"
+# Only for bt, we need per-target flags/libs!
+PKGCONFIG_LIBS="libev"
 
-# Only for bt, we need per-target flags!
-LIB_LDFLAGS="-lev"
+LIB_CFLAGS="-Iccan -std=gnu11 -D_GNU_SOURCE"
+LIB_LDFLAGS=""
 
 . "$(dirname $0)"/config.sh
 
