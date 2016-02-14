@@ -2,11 +2,13 @@
 # ex: sts=8 sw=8 ts=8 noet
 set -eu
 
-# Only for bt, we need per-target flags/libs!
-PKGCONFIG_LIBS="libev"
+# FIXME: ideally we'd do this, but ubuntu doesn't ship libev.pc.
+# cninja needs support for falling back on static flags when pkg-config fails!
+#PKGCONFIG_LIBS="libev"
 
 LIB_CFLAGS="-Iccan -std=gnu11 -D_GNU_SOURCE"
-LIB_LDFLAGS=""
+# Only for bt, we need per-target flags/libs!
+LIB_LDFLAGS="-lev"
 
 . "$(dirname $0)"/config.sh
 
