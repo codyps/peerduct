@@ -5,3 +5,4 @@ compiler:
 install: sudo apt-get install ninja
 script: ./build
 dist: trusty
+sudo: required
