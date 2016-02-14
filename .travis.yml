@@ -8,6 +8,6 @@ install:
         - sudo apt-get update -qq
         - sudo apt-get install ninja-build
         - sudo ln -s /usr/lib64/llvm/LLVMgold.so /usr/lib/LLVMgold.so
-script: ./build
+script: ./build -v
 cache: apt
 dist: trusty
