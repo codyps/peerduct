@@ -2,6 +2,6 @@ language: c
 compiler:
         - clang
         - gcc
-install: sudo apt-get install ninja-build
+install: sudo apt-get install ninja
 script: ./build
 dist: trusty
