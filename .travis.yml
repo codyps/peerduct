@@ -4,3 +4,4 @@ compiler:
         - gcc
 install: sudo apt-get install ninja-build
 script: ./build
+dist: trusty
