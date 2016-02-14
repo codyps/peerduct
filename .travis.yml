@@ -2,7 +2,9 @@ language: c
 compiler:
         - clang
         - gcc
-install: sudo apt-get install ninja
+install:
+        - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty main universe"
+        - sudo apt-get install ninja
 script: ./build
+cache: apt
 dist: trusty
-sudo: required
