@@ -4,6 +4,8 @@ compiler:
         - gcc
 install:
         - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty main universe"
+        - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty updates universe"
+        - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty security universe"
         - sudo apt-get install ninja-build
 script: ./build
 cache: apt
